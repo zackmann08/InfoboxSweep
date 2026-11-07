@@ -14,10 +14,6 @@ request off the talk page:
  }}
 ```
 
-It runs as [User:ZackBot](https://en.wikipedia.org/wiki/User:ZackBot), like
-[ZackBotPy](https://github.com/zackmann08/ZackBotPy) (DeprecBot), and has the
-same structure and safeguards.
-
 **Every run is a dry run unless you add `--live`.** A dry run reads
 Wikipedia, saves nothing, and writes every edit it would have made to a text
 report in `out/`.
