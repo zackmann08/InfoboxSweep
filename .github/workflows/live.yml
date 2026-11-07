@@ -1,0 +1,25 @@
+name: Live
+
+# The read-only tests against the real English Wikipedia: every Monday, and
+# by hand from the Actions tab.  They never edit.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYWIKIBOT_NO_USER_CONFIG: "2"
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - run: pytest -m live -v

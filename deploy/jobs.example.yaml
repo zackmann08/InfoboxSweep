@@ -1,0 +1,15 @@
+# Scheduled InfoboxSweep runs for the Toolforge jobs framework.  Copy to
+# ~/jobs.yaml, change it to suit, and load it with:
+#
+#     toolforge jobs load ~/jobs.yaml
+#
+# Times are UTC, and off the hour, when most jobs start.
+# tests/test_deploy.py checks every command here is one the bot understands.
+
+# Every Wednesday at 05:17.
+- name: ibox
+  command: >-
+    cd ~/InfoboxSweep && venv/bin/infoboxsweep run --live --stop-file stop/ibox
+  image: python3.13
+  schedule: "17 5 * * 3"
+  emails: onfailure
