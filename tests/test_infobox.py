@@ -151,3 +151,21 @@ def test_check_infoboxes_resolves_only_what_it_must():
     [names] = asked
     assert names[:3] == ['Infobox film', 'Film infobox', 'Use dmy dates']
     assert 'Short description' in names and len(names) == len(set(names))
+
+
+def test_infobox_chinese_is_not_an_infobox():
+    # Pages with only {{Chinese}} at the top: a box of a name's Chinese
+    # forms, not the article's infobox.
+    lead = ("{{Chinese\n| t = 紫禁城\n| p = Zǐjìnchéng\n}}\n"
+            "'''Example''' is a place.\n== A ==\n")
+    for text in (lead, lead.replace('{{Chinese', '{{Infobox Chinese'),
+                 lead.replace('{{Chinese', '{{chinese')):
+        found = verdict(text, RENDERS)
+        assert not found.found and found.review is None, text
+    # By another name for it, a redirect.
+    found = verdict(lead.replace('{{Chinese', '{{Chinese name'), RENDERS,
+                    resolved={'Chinese name': 'Infobox Chinese'})
+    assert not found.found
+    # With a real infobox too, the article has one.
+    assert verdict('{{Infobox settlement|name=X}}\n' + lead, RENDERS).found
+    assert not is_infobox_name('Infobox Chinese') and not is_infobox_name('Chinese')

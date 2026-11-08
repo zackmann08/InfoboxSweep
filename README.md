@@ -109,8 +109,10 @@ all do. So the article **has an infobox** only if both of these hold:
    Calls in comments or `<nowiki>` don't count, nor does {{Infobox
    requested}}. Nor does {{Infobox designation list}} ({{Designation
    list}}, or any other name for it): it lists a place's heritage
-   designations, as on Gosford House, and isn't the article's infobox, so an
-   article whose only "infobox" it is has none (`NOT_INFOBOXES`).
+   designations, as on Gosford House, and isn't the article's infobox. Nor
+   does {{Infobox Chinese}} ({{Chinese}}, or any other name for it), a box
+   of a name in Chinese scripts and romanizations. An article whose only
+   "infobox" is one of these has none (`NOT_INFOBOXES`).
 2. **It renders.** The article transcludes Template:Infobox or
    [Module:Infobox](https://en.wikipedia.org/wiki/Module:Infobox), which
    nearly every infobox is built on, or one of the families

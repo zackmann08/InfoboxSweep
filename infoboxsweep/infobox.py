@@ -18,8 +18,9 @@ two things:
 
 Some templates named "Infobox ..." aren't an article's infobox: {{Infobox
 designation list}} (or {{Designation list}}) is a box listing a place's
-heritage designations, as on Gosford House, which has no infobox.  Those in
-NOT_INFOBOXES never count, wherever they are, called by any name: an
+heritage designations, as on Gosford House, which has no infobox, and
+{{Infobox Chinese}} (or {{Chinese}}) a box of a name in Chinese scripts and
+romanizations.  Those in NOT_INFOBOXES never count, wherever they are, called by any name: an
 article whose only "infobox" is one of them has no infobox.
 
 Both: an infobox.  Neither: no infobox, and the request stands, even if the
@@ -48,7 +49,10 @@ INFOBOX_FAMILIES = frozenset({
 
 # Templates named like infoboxes, or redirecting to one, that aren't an
 # article's infobox, without Template:.
-NOT_INFOBOXES = frozenset({'Infobox designation list', 'Designation list'})
+NOT_INFOBOXES = frozenset({
+    'Infobox designation list', 'Designation list',   # heritage designations
+    'Infobox Chinese', 'Chinese',                     # a name in Chinese
+})
 
 INFOBOX_PAGES = ('Template:Infobox', 'Module:Infobox',
                  *sorted(f'Template:{name}' for name in INFOBOX_FAMILIES))
