@@ -16,7 +16,7 @@ from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 
 from . import BRFA, PHOTO_BRFA, PHOTO_CATEGORY, ROOT_CATEGORY
-from .infobox import INFOBOX_PAGES, Verdict, verdict
+from .infobox import INFOBOX_PAGES, Verdict, is_infobox_name, lead_section, template_calls, verdict
 from .photo import photo_verdict
 from .request import REQUEST_PARAMS, REQUEST_TEMPLATE
 from .wiki import Wiki, WikiPage
@@ -73,12 +73,22 @@ class Task:
 
 def check_infoboxes(wiki: Wiki, articles: list[WikiPage],
                     ignore: list[str]) -> dict[str, Verdict]:
-    """Which articles have an infobox: by what they transclude, in one
-    request a batch."""
+    """Which articles have an infobox (see infoboxsweep.infobox): an infobox
+    call in the lead section, and its transclusion.  One request a batch for
+    what they transclude, and one for which of their lead sections'
+    templates redirect to an infobox, as some names do ({{Film infobox}})."""
     titles = [article.title() for article in articles]
     transcluded = wiki.transcluding(titles, INFOBOX_PAGES) if titles else {}
+    # Only the articles that render an infobox, but call none by its name.
+    unnamed: list[str] = []
+    for article in articles:
+        if article.title() in transcluded:
+            calls = template_calls(lead_section(article.text), ignore)
+            if not any(is_infobox_name(name) for name in calls):
+                unnamed += [name for name in calls if name not in unnamed]
+    resolved = wiki.redirect_targets(unnamed) if unnamed else {}
     return {article.title(): verdict(article.text, transcluded.get(article.title(), set()),
-                                     ignore=ignore)
+                                     ignore=ignore, resolved=resolved)
             for article in articles}
 
 

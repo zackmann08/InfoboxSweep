@@ -65,7 +65,8 @@ def test_dry_run(tmp_path):
     [edit] = report.edits
     assert edit.talk == 'Talk:Example' and not edit.saved
     assert edit.removed == ['needs-infobox=yes from {{WikiProject Film}}']
-    assert edit.evidence == 'transcludes Template:Infobox'
+    assert edit.evidence == ('{{Infobox film}} in the lead section, which transcludes '
+                             'Template:Infobox')
     assert '-{{WikiProject Film|needs-infobox=yes}}' in edit.diff
     assert report.reviews == [('Talk:Gone', 'Gone', 'the article does not exist')]
     assert wiki.parsed == ['Talk:Example']   # checked with MediaWiki, even in a dry run
@@ -472,3 +473,17 @@ def test_is_request_category():
     assert INFOBOX.is_request_category('Category:Wikipedia articles with an infobox request')
     assert INFOBOX.is_request_category('Category:Film articles needing infoboxes')
     assert not INFOBOX.is_request_category('Category:Infobox templates')
+
+
+def test_transcluding_template_infobox_is_not_an_infobox(tmp_path):
+    # As on Beat Generation, Sayfo and Virgil Fox: Template:Infobox comes
+    # from templates further down, not from an infobox.
+    from tests.test_infobox import BEAT_GENERATION, SAYFO, VIRGIL_FOX
+    wiki = FakeWiki()
+    for title, text in [('Beat Generation', BEAT_GENERATION), ('Sayfo', SAYFO),
+                        ('Virgil Fox', VIRGIL_FOX)]:
+        wiki.request(title, text, FILM_TALK)
+        wiki.transclusions[title] = {'Template:Infobox', 'Module:Infobox'}
+    _, report = run(wiki, tmp_path)
+    assert report.checked == 3 and report.unfulfilled == 3 and report.fulfilled == 0
+    assert report.edits == [] and report.reviews == []

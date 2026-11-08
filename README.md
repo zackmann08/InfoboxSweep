@@ -91,16 +91,38 @@ every category and page too.
 ### 2. Check the article
 
 Category members are talk pages. For each, the bot checks the article it
-belongs to (`Talk:Foo` → `Foo`), not the talk page. The article **has an
-infobox** if it transcludes
-[Template:Infobox](https://en.wikipedia.org/wiki/Template:Infobox) or
-[Module:Infobox](https://en.wikipedia.org/wiki/Module:Infobox), which nearly
-every infobox is built on, or one of the taxobox and chembox templates, which
-are built their own way (`INFOBOX_PAGES` in
-[`infoboxsweep/infobox.py`](infoboxsweep/infobox.py)). That counts infoboxes
-however they get there, such as through a wrapper template, and never
-counts one that's only in a comment. It's what MediaWiki actually rendered,
-asked of the API 50 articles at a time.
+belongs to (`Talk:Foo` → `Foo`), not the talk page
+([`infoboxsweep/infobox.py`](infoboxsweep/infobox.py)).
+
+Transcluding [Template:Infobox](https://en.wikipedia.org/wiki/Template:Infobox)
+isn't enough. Other templates are built on it too, such as
+{{External media}}, some sidebars and side boxes, so an article can
+transclude it with no infobox at all. Beat Generation, Sayfo and Virgil Fox
+all do. So the article **has an infobox** only if both of these hold:
+
+1. **An infobox is called in the lead section**, the wikitext above the
+   first heading, where an article's infobox goes. That's a template whose
+   name starts with "Infobox" ({{Infobox person}}, {{Infobox settlement}}, …),
+   one that redirects to such a template ({{Film infobox}} → {{Infobox
+   film}}, looked up on the wiki), or one of the infobox families named
+   otherwise: the taxoboxes, {{Chembox}}, {{Drugbox}} (`INFOBOX_FAMILIES`).
+   Calls in comments or `<nowiki>` don't count, nor does {{Infobox
+   requested}}.
+2. **It renders.** The article transcludes Template:Infobox or
+   [Module:Infobox](https://en.wikipedia.org/wiki/Module:Infobox), which
+   nearly every infobox is built on, or one of the families
+   (`INFOBOX_PAGES`), as MediaWiki reports.
+
+| The article | Verdict |
+|---|---|
+| Calls an infobox in its lead, and it renders | has an infobox: the request comes off |
+| Calls no infobox (even if it transcludes Template:Infobox through something else) | no infobox: the request stands |
+| Calls an infobox in its lead that doesn't render (a broken or missing template) | manual review |
+| Calls an infobox only further down | manual review: is it the article's infobox, or one for a section? |
+
+The bot asks MediaWiki what 50 articles transclude in one request, and for
+those that render an infobox without calling one by name, which of their
+lead templates are redirects, in another.
 
 ### 3. Take the request off the talk page
 

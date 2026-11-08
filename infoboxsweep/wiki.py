@@ -148,6 +148,22 @@ class Wiki:
                     break
                 request.update(data['continue'])
 
+    def redirect_targets(self, templates: list[str]) -> dict[str, str]:
+        """{template: the template it redirects to} for those of templates
+        (without Template:) that are redirects, BATCH to a request."""
+        found: dict[str, str] = {}
+        for start in range(0, len(templates), BATCH):
+            batch = templates[start:start + BATCH]
+            data = self.site.simple_request(
+                action='query', redirects=1, formatversion=2,
+                titles='|'.join(f'Template:{name}' for name in batch)).submit()
+            query = data.get('query', {})
+            normalized = {n['to']: n['from'] for n in query.get('normalized', [])}
+            for redirect in query.get('redirects', []):
+                asked = normalized.get(redirect['from'], redirect['from'])
+                found[asked.split(':', 1)[-1]] = redirect['to'].split(':', 1)[-1]
+        return found
+
     def lead_images(self, titles: list[str]) -> dict[str, LeadImage]:
         """{title: its lead image} for those of titles that have one, as the
         PageImages extension chose it from the lead section: the free one

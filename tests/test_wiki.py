@@ -202,3 +202,16 @@ def test_file_info():
         'File:A.jpg': FileInfo('image/jpeg', 3000, 2000)}
     [(_, params)] = site.calls
     assert params['prop'] == 'imageinfo' and params['iiprop'] == 'mime|size'
+
+
+def test_redirect_targets():
+    site = StubSite()
+    site.responses = [{'query': {
+        'normalized': [{'from': 'Template:Film_infobox', 'to': 'Template:Film infobox'}],
+        'redirects': [{'from': 'Template:Film infobox', 'to': 'Template:Infobox film'}],
+        'pages': [{'title': 'Template:Infobox film'}, {'title': 'Template:Use dmy dates'}]}}]
+    assert Wiki(site).redirect_targets(['Film_infobox', 'Use dmy dates']) == {
+        'Film_infobox': 'Infobox film'}
+    [(_, params)] = site.calls
+    assert params['redirects'] == 1
+    assert params['titles'] == 'Template:Film_infobox|Template:Use dmy dates'

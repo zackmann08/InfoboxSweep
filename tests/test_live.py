@@ -81,3 +81,14 @@ def test_the_photo_request_templates(wiki):
     from infoboxsweep.tasks import PHOTO
     names = PHOTO.request_names(wiki)
     assert {'Photo requested', 'Reqphoto', 'Image requested'} <= set(names)
+
+
+def test_no_infobox_though_it_transcludes_template_infobox(wiki):
+    # Virgil Fox has no infobox, but transcludes Template:Infobox through
+    # other templates: it must not count.
+    from infoboxsweep.tasks import INFOBOX
+    page = next(iter(wiki.load(['Virgil Fox'])))
+    found = INFOBOX.check(wiki, [page], ['Infobox requested'])['Virgil Fox']
+    assert not found.found, found.evidence
+    paris = next(iter(wiki.load(['Paris'])))
+    assert INFOBOX.check(wiki, [paris], ['Infobox requested'])['Paris'].found

@@ -107,7 +107,8 @@ def test_stopped_as_asked(wiki, capsys, tmp_path):
 def test_check(wiki, capsys):
     assert cli.main(['check', 'Example']) == 0
     out = capsys.readouterr().out
-    assert out == ('Example: has an infobox (transcludes Template:Infobox)\n'
+    assert out == ('Example: has an infobox ({{Infobox film}} in the lead section, which '
+                   'transcludes Template:Infobox)\n'
                    'Talk:Example: needs-infobox=yes from {{WikiProject Film}}\n'
                    'After removing it: in no infobox request category\n')
     wiki.sticky['Talk:Example'] = {FILM_CATEGORY}

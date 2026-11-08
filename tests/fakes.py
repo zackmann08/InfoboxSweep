@@ -125,6 +125,7 @@ class FakeWiki:
         self.user, self.rights = user, set(rights)
         self.request_redirects = list(request_redirects)
         self.photo_redirects = ['Reqphoto']
+        self.template_redirects = {}   # template -> the one it redirects to
         self.leads = {}          # article title -> LeadImage
         self.files = {}          # File:... -> FileInfo
         self.logged_in = False
@@ -197,6 +198,10 @@ class FakeWiki:
         if title == 'Image requested':
             return []
         return list(self.request_redirects)
+
+    def redirect_targets(self, templates):
+        return {name: self.template_redirects[name] for name in templates
+                if name in self.template_redirects}
 
     def lead_images(self, titles):
         return {title: self.leads[title] for title in titles if title in self.leads}
