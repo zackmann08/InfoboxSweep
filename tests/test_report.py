@@ -9,8 +9,8 @@ def test_report(tmp_path):
     report = Report(live=False, started=datetime(2026, 11, 7, 12, 0, 1, tzinfo=UTC),
                     root='Category:R', finished=datetime(2026, 11, 7, 12, 5, tzinfo=UTC),
                     account='ExampleBot', source='every page in the tree', categories=3,
-                    found=10, duplicates=2, depth=2, checked=9, with_infobox=4,
-                    without_infobox=3, not_followed=[('Category:Films', 'Category:R')],
+                    found=10, duplicates=2, depth=2, checked=9, fulfilled=4,
+                    unfulfilled=3, not_followed=[('Category:Films', 'Category:R')],
                     wiki_report='saved', ended_early='checked 9 pages (--limit)',
                     stopped='5 pages in a row failed')
     report.edits.append(Edit('Talk:A', 'A', ['{{Infobox requested}}'], 'Summary',
@@ -20,7 +20,7 @@ def test_report(tmp_path):
     report.skip('Talk:C', 'nobots')
     report.errors.append(('Talk:D', 'SaveError: x'))
     path = report.write(tmp_path / 'out')
-    assert path.name == 'dry-run-20261107-120001.txt'
+    assert path.name == 'dry-run-infobox-20261107-120001.txt'
     text = path.read_text()
     for line in ['DRY RUN: nothing was saved', 'Account:  ExampleBot',
                  'Category tree: 3 categories, 2 levels below Category:R; 10 distinct pages '

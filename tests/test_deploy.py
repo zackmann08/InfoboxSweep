@@ -17,6 +17,7 @@ import pytest
 import yaml
 
 from infoboxsweep import cli
+from infoboxsweep.tasks import INFOBOX, PHOTO
 
 DEPLOY = Path(__file__).parent.parent / 'deploy'
 RUNIBOX = DEPLOY / 'runibox.sh'
@@ -36,7 +37,8 @@ def toolforge(tmp_path):
     (bot_dir / 'venv' / 'bin').mkdir(parents=True)
     bin_dir.mkdir()
     for path, log in [(bin_dir / 'toolforge', tmp_path / 'toolforge.log'),
-                      (bot_dir / 'venv' / 'bin' / 'infoboxsweep', tmp_path / 'bot.log')]:
+                      (bot_dir / 'venv' / 'bin' / 'infoboxsweep', tmp_path / 'bot.log'),
+                      (bot_dir / 'venv' / 'bin' / 'imagesweep', tmp_path / 'images.log')]:
         path.write_text(STAND_IN.format(log=str(log)))
         path.chmod(0o755)
     return tmp_path, bin_dir, bot_dir
@@ -56,6 +58,19 @@ def bash(toolforge, function, *args, **env):
 
 def _read(path):
     return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+
+@needs_bash
+@pytest.mark.parametrize(('function', 'log'), [('runibox', 'bot.log'),
+                                               ('runimages', 'images.log')])
+def test_each_task_has_its_command(toolforge, function, log):
+    tmp_path, _, _ = toolforge
+    assert bash(toolforge, function, '--dry-run').returncode == 0
+    [call] = _read(tmp_path / 'toolforge.log')
+    name = {'runibox': 'dry-ibox', 'runimages': 'dry-images'}[function]
+    assert call[:3] == ['jobs', 'run', name]
+    subprocess.run(['sh', '-c', call[call.index('--command') + 1]], check=True)
+    assert _read(tmp_path / log) == [['run', '--stop-file', f'stop/{name}']]
 
 
 @needs_bash
@@ -105,7 +120,10 @@ def test_stopibox_gives_up(toolforge):
     done = bash(toolforge, 'stopibox', '--dry-run', INFOBOXSWEEP_STOP_WAIT='0')
     assert done.returncode == 1 and "dry-ibox hasn't stopped" in done.stderr
     assert not (bot_dir / 'stop' / 'dry-ibox').exists()
-    assert bash(toolforge, 'stopibox', 'extra').returncode == 2
+    done = bash(toolforge, 'stopimages', INFOBOXSWEEP_STOP_WAIT='0')
+    assert done.returncode == 1 and "images hasn't stopped" in done.stderr
+    done = bash(toolforge, 'stopimages', 'extra')
+    assert done.returncode == 2 and 'usage: stopimages' in done.stderr
 
 
 def test_jobs_example():
@@ -116,6 +134,6 @@ def test_jobs_example():
         cd, run = job['command'].split(' && ')
         assert cd == 'cd ~/InfoboxSweep'
         program, *args = shlex.split(run)
-        assert program == 'venv/bin/infoboxsweep'
-        cli._build_parser().parse_args(args)
+        task = {'venv/bin/infoboxsweep': INFOBOX, 'venv/bin/imagesweep': PHOTO}[program]
+        cli._build_parser(task).parse_args(args)
         assert f'stop/{job["name"]}' in args

@@ -9,8 +9,9 @@ from datetime import UTC, datetime
 
 import mwparserfromhell
 
-from infoboxsweep import ROOT_CATEGORY
+from infoboxsweep import PHOTO_CATEGORY, ROOT_CATEGORY
 from infoboxsweep.bot import Options
+from infoboxsweep.photo import FileInfo, LeadImage
 from infoboxsweep.wikitext import is_yes, normalize_param, normalize_template_name
 
 BOT = 'ExampleBot'
@@ -18,6 +19,10 @@ FILM_CATEGORY = 'Category:Film articles needing infoboxes'
 BIO_CATEGORY = 'Category:Biography articles needing infoboxes'
 # Which category each banner's needs-infobox=yes puts a talk page in.
 BANNERS = {'WikiProject Film': FILM_CATEGORY, 'WikiProject Biography': BIO_CATEGORY}
+OHIO_PHOTOS = 'Category:Wikipedia requested photographs in Ohio'
+PEOPLE_PHOTOS = 'Category:Wikipedia requested photographs of people'
+# And needs-photo=yes.
+PHOTO_BANNERS = {'WikiProject Biography': PEOPLE_PHOTOS}
 NAMESPACES = {'Talk': 1, 'User': 2, 'User talk': 3, 'Template': 10, 'Template talk': 11,
               'Category': 14, 'Category talk': 15, 'Draft': 118, 'Draft talk': 119}
 SUBJECTS = {1: 0, 3: 2, 11: 10, 15: 14, 119: 118}
@@ -119,6 +124,9 @@ class FakeWiki:
         self.add(self.run_page, self.report_page, *pages)
         self.user, self.rights = user, set(rights)
         self.request_redirects = list(request_redirects)
+        self.photo_redirects = ['Reqphoto']
+        self.leads = {}          # article title -> LeadImage
+        self.files = {}          # File:... -> FileInfo
         self.logged_in = False
         self.members = {}        # category -> [page titles]
         self.subcats = {}        # category -> [subcategory titles]
@@ -184,7 +192,22 @@ class FakeWiki:
         return page.latest_revision.timestamp, page.latest_revision.user
 
     def redirects_to(self, title):
+        if title == 'Image requested':
+            return list(self.photo_redirects)
         return list(self.request_redirects)
+
+    def lead_images(self, titles):
+        return {title: self.leads[title] for title in titles if title in self.leads}
+
+    def file_info(self, files):
+        return {file: self.files[file] for file in files if file in self.files}
+
+    def photo(self, article, file='File:Example building.jpg', *, free=True,
+              mime='image/jpeg', size=(3000, 2000)):
+        """Give an article a lead image."""
+        self.leads[article] = LeadImage(file, free)
+        self.files[file] = FileInfo(mime, *size)
+        return self
 
     def subcategories(self, category):
         return list(self.subcats.get(category, []))
@@ -209,9 +232,14 @@ class FakeWiki:
             name = normalize_template_name(template.name)
             if name in ('Infobox requested', *self.request_redirects):
                 found.add(ROOT_CATEGORY)
+            if name in ('Image requested', *self.photo_redirects):
+                where = template.get('in').value.strip() if template.has('in') else ''
+                found.add(f'{PHOTO_CATEGORY} in {where}' if where else PHOTO_CATEGORY)
             for param in template.params:
                 if normalize_param(param.name) == 'needs-infobox' and is_yes(param.value):
                     found.add(BANNERS.get(name, ROOT_CATEGORY))
+                if normalize_param(param.name) == 'needs-photo' and is_yes(param.value):
+                    found.add(PHOTO_BANNERS.get(name, PHOTO_CATEGORY))
         return found
 
 

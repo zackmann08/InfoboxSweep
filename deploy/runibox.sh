@@ -1,35 +1,56 @@
-# runibox and stopibox: start and stop a Toolforge job running InfoboxSweep.
-# Source this file from ~/.bashrc:
+# runibox, runimages, stopibox and stopimages: start and stop Toolforge jobs
+# running InfoboxSweep's two tasks.  Source this file from ~/.bashrc:
 #
 #     source ~/InfoboxSweep/deploy/runibox.sh
 #
-# runibox starts a live run over the whole category tree, as the job "ibox";
-# with --dry-run first, a dry run, as "dry-ibox".  Anything after goes to
-# infoboxsweep run, so quote option values with spaces:
+# runibox starts a live run of the infobox task (infoboxsweep) over its whole
+# category tree, as the job "ibox"; runimages, of the photograph task
+# (imagesweep), as "images".  With --dry-run first, a dry run, as "dry-ibox"
+# or "dry-images".  Anything after goes to the command's run, so quote
+# option values with spaces:
 #
 #     runibox
 #     runibox --max-edits 10
-#     runibox --trial --max-edits 50
-#     runibox --dry-run --limit 500
+#     runimages --trial --max-edits 50
+#     runimages --dry-run --limit 500
 #
-# stopibox stops the run cleanly, so that it still gives its row on
-# User:ZackBot/InfoboxReport its final numbers ("manually stopped by the bot
-# operator"), and waits until it has:
+# stopibox and stopimages stop the run cleanly, so that it still gives its
+# row on User:ZackBot/InfoboxReport or User:ZackBot/ImageReport its final
+# numbers ("manually stopped by the bot operator"), and wait until it has:
 #
 #     stopibox
-#     stopibox --dry-run
+#     stopimages --dry-run
 #
 # INFOBOXSWEEP_DIR is where the bot is checked out (default: ~/InfoboxSweep),
-# INFOBOXSWEEP_IMAGE the image its virtual environment was built with (default:
-# python3.13), and INFOBOXSWEEP_STOP_WAIT how long stopibox waits, in seconds
-# (default: 600).
+# INFOBOXSWEEP_IMAGE the image its virtual environment was built with
+# (default: python3.13), and INFOBOXSWEEP_STOP_WAIT how long the stop
+# commands wait, in seconds (default: 600).
 
 runibox() {
-  local live=--live name=ibox dir cmd opt
-  if [ "$1" = --dry-run ]; then live='' name=dry-ibox; shift; fi
+  _infoboxsweep_run infoboxsweep ibox "$@"
+}
+
+runimages() {
+  _infoboxsweep_run imagesweep images "$@"
+}
+
+stopibox() {
+  _infoboxsweep_stop stopibox ibox "$@"
+}
+
+stopimages() {
+  _infoboxsweep_stop stopimages images "$@"
+}
+
+# _infoboxsweep_run PROGRAM JOB [--dry-run] [options]: start the job running
+# "PROGRAM run [--live] --stop-file stop/JOB options".
+_infoboxsweep_run() {
+  local program=$1 name=$2 live=--live dir cmd opt
+  shift 2
+  if [ "$1" = --dry-run ]; then live='' name="dry-$name"; shift; fi
   dir="${INFOBOXSWEEP_DIR:-$HOME/InfoboxSweep}"
   # Quote for the job's shell: each ' becomes '\''.
-  cmd="cd '${dir//\'/\'\\\'\'}' && venv/bin/infoboxsweep run"
+  cmd="cd '${dir//\'/\'\\\'\'}' && venv/bin/$program run"
   [ -n "$live" ] && cmd+=" $live"
   cmd+=" --stop-file 'stop/$name'"
   for opt in "$@"; do cmd+=" '${opt//\'/\'\\\'\'}'"; done
@@ -37,14 +58,15 @@ runibox() {
   toolforge jobs run "$name" --image "${INFOBOXSWEEP_IMAGE:-python3.13}" --command "$cmd"
 }
 
-# stopibox [--dry-run]: ask the run to stop, by creating its stop file, and
-# wait until the bot has stopped and reported, which it says by deleting
-# the file.
-stopibox() {
-  local name=ibox dir stop waited=0 limit="${INFOBOXSWEEP_STOP_WAIT:-600}"
-  if [ "$1" = --dry-run ]; then name=dry-ibox; shift; fi
+# _infoboxsweep_stop FUNCTION JOB [--dry-run]: ask the job to stop, by
+# creating its stop file, and wait until the bot has stopped and reported,
+# which it says by deleting the file.
+_infoboxsweep_stop() {
+  local function=$1 name=$2 dir stop waited=0 limit="${INFOBOXSWEEP_STOP_WAIT:-600}"
+  shift 2
+  if [ "$1" = --dry-run ]; then name="dry-$name"; shift; fi
   if [ $# -ne 0 ]; then
-    echo 'usage: stopibox [--dry-run]' >&2
+    echo "usage: $function [--dry-run]" >&2
     return 2
   fi
   dir="${INFOBOXSWEEP_DIR:-$HOME/InfoboxSweep}"

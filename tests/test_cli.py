@@ -41,7 +41,8 @@ def test_tree(wiki, capsys):
 def test_tree_too_big(wiki, capsys, monkeypatch):
     from infoboxsweep import tree
     real = tree.walk
-    monkeypatch.setattr(tree, 'walk', lambda w, root: real(w, root, max_categories=1))
+    monkeypatch.setattr(tree, 'walk', lambda w, root, **kw: real(w, root, max_categories=1,
+                                                                   **kw))
     assert cli.main(['tree', '--category', 'Wikipedia articles with an infobox request']) == 1
     assert 'stopped part way' in capsys.readouterr().err
 
@@ -152,4 +153,60 @@ def test_connect(monkeypatch, tmp_path):
 def test_python_dash_m():
     done = subprocess.run([sys.executable, '-m', 'infoboxsweep', '--help'], capture_output=True,
                           text=True)
-    assert done.returncode == 0 and 'infoboxsweep run --live' in done.stdout
+    assert done.returncode == 0 and 'run --live' in done.stdout
+    assert done.stdout.startswith('usage: infoboxsweep')
+
+
+@pytest.fixture
+def photo_wiki(monkeypatch, tmp_path):
+    from tests.test_bot_photo import photo_wiki
+    wiki = photo_wiki()
+    monkeypatch.setattr(cli, '_connect', lambda args: wiki)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv('PYWIKIBOT_DIR', raising=False)
+    monkeypatch.setenv('HOME', str(tmp_path))
+    return wiki
+
+
+def test_imagesweep_tree(photo_wiki, capsys):
+    assert cli.images_main(['tree']) == 0
+    out = capsys.readouterr().out
+    assert 'Category:Wikipedia requested photographs: 3 categories, 1 levels deep' in out
+    assert ('Not followed (no "photograph" or "photo" or "image" or "picture" in its name): '
+            'Category:Ohio') in out
+
+
+def test_imagesweep_run(photo_wiki, capsys, tmp_path):
+    (tmp_path / 'user-config.py').write_text('')
+    assert cli.images_main(['run', '--live', '--progress-minutes', '0']) == 0
+    assert ('Checked 7 talk page(s): 3 article(s) with a photograph, 3 without. Changed 2; '
+            '3 for manual review') in capsys.readouterr().out
+    assert photo_wiki.page('User:ExampleBot/ImageReport').saved
+
+
+def test_imagesweep_check(photo_wiki, capsys):
+    assert cli.images_main(['check', 'Statehouse']) == 0
+    assert capsys.readouterr().out == (
+        'Statehouse: has a photograph (lead image [[:File:Ohio Statehouse.jpg]] (JPEG, '
+        '3000×2000))\nTalk:Statehouse: {{Image requested}}\n'
+        'After removing it: in no photograph request category\n')
+    assert cli.images_main(['check', 'Flagged']) == 0
+    assert capsys.readouterr().out.startswith(
+        'Flagged: no photograph (the lead image, [[:File:Flag of Ohio.svg]], is not a '
+        'photograph: its name has "flag")\n')
+    assert cli.images_main(['check', 'Logo PNG']) == 0
+    assert 'Logo PNG: for a human: the lead image' in capsys.readouterr().out
+    assert cli.images_main(['check', 'Interior']) == 0
+    assert ('Talk:Interior: for a human: {{Image requested}} asks for something particular: '
+            'the dome inside\nTalk:Interior: no photograph request found\n'
+            ) in capsys.readouterr().out
+    assert cli.images_main(['check', 'Pending']) == 0
+    assert capsys.readouterr().out.startswith('Pending: no photograph (no lead image)\n')
+
+
+def test_imagesweep_help():
+    done = subprocess.run([sys.executable, '-c', 'import sys; from infoboxsweep.cli import '
+                           'images_main; sys.exit(images_main(["--help"]))'],
+                          capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout.startswith('usage: imagesweep')
+    assert 'removing photograph requests' in done.stdout

@@ -1,20 +1,24 @@
-"""Command line entry point.
+"""Command line entry points: one command for each task.
 
-    infoboxsweep tree      walk the category tree and say what's in it: its
+    infoboxsweep ...    infobox requests (Category:Wikipedia articles with an
+                        infobox request), reported on User:ZackBot/InfoboxReport
+    imagesweep ...      photograph requests (Category:Wikipedia requested
+                        photographs), reported on User:ZackBot/ImageReport
+
+Both take the same commands:
+
+    tree                walk the category tree and say what's in it: its
                         categories, how deep it goes, and how many distinct
                         pages it holds
-    infoboxsweep run       a dry run over every page in the tree: reads the wiki,
+    run                 a dry run over every page in the tree: reads the wiki,
                         saves nothing, and writes the edits it would make to a
                         report in out/
-    infoboxsweep run --limit 50
-                        the same, for the first 50 talk pages only
-    infoboxsweep run --page "Talk:Joe Bloggs"
+    run --limit 50      the same, for the first 50 talk pages only
+    run --page "Talk:Joe Bloggs"
                         the same, for one page (an article's title works too)
-    infoboxsweep run --live
-                        edit for real (needs user-config.py and an approved bot account)
-    infoboxsweep check "Joe Bloggs"
-                        say whether an article has an infobox, and what the bot would
-                        take off its talk page
+    run --live          edit for real (needs user-config.py and an approved bot account)
+    check "Joe Bloggs"  say whether an article has what was asked for, and what the
+                        bot would take off its talk page
 
 Every run is a dry run unless --live is given.
 """
@@ -27,7 +31,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import BRFA, ROOT_CATEGORY, __version__
+from . import __version__
+from .tasks import INFOBOX, PHOTO, Task
 
 log = logging.getLogger('infoboxsweep')
 
@@ -38,9 +43,10 @@ USER_AGENT = (f'InfoboxSweep/{__version__} ({{script_comments}}) {{pwb}} ({{revi
               '{http_backend} {python}')
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, task: Task = INFOBOX) -> int:
+    """infoboxsweep, or with task, the command for it."""
     _never_crash_printing()
-    parser = _build_parser()
+    parser = _build_parser(task)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format='%(levelname)s %(message)s')
@@ -51,10 +57,15 @@ def main(argv: list[str] | None = None) -> int:
                      'articles')
     wiki = _connect(args)
     if args.command == 'tree':
-        return _tree(args, wiki)
+        return _tree(args, wiki, task)
     if args.command == 'check':
-        return _check(args, wiki)
-    return _run(args, wiki)
+        return _check(args, wiki, task)
+    return _run(args, wiki, task)
+
+
+def images_main(argv: list[str] | None = None) -> int:
+    """imagesweep: photograph requests."""
+    return main(argv, PHOTO)
 
 
 def _never_crash_printing() -> None:
@@ -66,9 +77,10 @@ def _never_crash_printing() -> None:
             stream.reconfigure(encoding=encoding, errors='replace')
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog='infoboxsweep', description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+def _build_parser(task: Task = INFOBOX) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog=task.name, description=f'{task.name}: {task.doing}.\n\n{__doc__}',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     # Not from user-config.py: without a mylang there, Pywikibot quietly
     # picks test.wikipedia.
     parser.add_argument('--lang', default='en')
@@ -77,13 +89,13 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest='command', required=True)
 
     tree = sub.add_parser('tree', help='walk the category tree, and say what is in it')
-    _add_category(tree)
+    _add_category(tree, task)
     tree.add_argument('--list', action='store_true',
                       help='also print every category, and every page, one to a line')
 
-    run = sub.add_parser('run', help='remove infobox requests where the article has an '
-                                     'infobox; a dry run unless --live is given')
-    _add_category(run)
+    run = sub.add_parser('run', help=f'remove {task.request}s where the article has '
+                                     f'{task.thing}; a dry run unless --live is given')
+    _add_category(run, task)
     run.add_argument('--live', action='store_true', help='edit for real')
     run.add_argument('--trial', action='store_true',
                      help='allow a live run without the bot flag, for approved BRFA trial '
@@ -104,31 +116,31 @@ def _build_parser() -> argparse.ArgumentParser:
                           'User:<account>/Run)')
     run.add_argument('--report-page', metavar='TITLE',
                      help='where a live run keeps its row, and the pages for manual review '
-                          '(default: User:<account>/InfoboxReport); "" for none')
+                          f'(default: User:<account>/{task.report}); "" for none')
     run.add_argument('--stop-file', type=Path, metavar='PATH',
                      help='stop cleanly, still reporting on the wiki, once this file exists '
-                          '(deploy/runibox.sh gives each job one, for stopibox)')
+                          '(deploy/runibox.sh gives each job one)')
     run.add_argument('--progress-minutes', type=int, default=30, metavar='N',
                      help='during a live run, update the report page every N minutes, on the '
                           'clock from midnight UTC (default: 30, on the hour and the half '
                           'hour); 0 for only at the start and the end')
     run.add_argument('--brfa', metavar='TITLE',
-                     help=f'the bot approval linked from every edit summary (default: {BRFA}); '
-                          '"" for none')
+                     help=f'the bot approval linked from every edit summary (default: '
+                          f'{task.brfa}); "" for none')
     run.add_argument('--summary-suffix', default='', metavar='TEXT',
                      help='added to the end of every edit summary')
     run.add_argument('--out-dir', type=Path, default=Path('out'),
                      help='where the report is written (default: out)')
 
-    check = sub.add_parser('check', help='say whether an article has an infobox, and what the '
-                                         'bot would take off its talk page; saves nothing')
+    check = sub.add_parser('check', help=f'say whether an article has {task.thing}, and what '
+                                         'the bot would take off its talk page; saves nothing')
     check.add_argument('title', help='the article, or its talk page')
     return parser
 
 
-def _add_category(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument('--category', default=ROOT_CATEGORY, metavar='TITLE',
-                        help=f'the root of the category tree (default: {ROOT_CATEGORY})')
+def _add_category(parser: argparse.ArgumentParser, task: Task) -> None:
+    parser.add_argument('--category', default=task.root, metavar='TITLE',
+                        help=f'the root of the category tree (default: {task.root})')
 
 
 def user_config_dir() -> Path | None:
@@ -157,14 +169,14 @@ def _category_title(title: str) -> str:
     return title if title.lower().startswith('category:') else f'Category:{title}'
 
 
-def _tree(args: argparse.Namespace, wiki: Any) -> int:
+def _tree(args: argparse.Namespace, wiki: Any, task: Task) -> int:
     from .tree import walk
-    tree = walk(wiki, _category_title(args.category))
+    tree = walk(wiki, _category_title(args.category), follow=task.follows)
     print(f'{tree.root}: {len(tree.categories)} categories, {tree.depth} levels deep')
     print(f'{len(tree.pages)} distinct pages; {tree.duplicates} more listings of pages in '
           'more than one category')
     for category, parent in tree.not_followed:
-        print(f'Not followed (no "infobox" in its name): {category}, in {parent}')
+        print(f'Not followed (no {task.keyword_text()} in its name): {category}, in {parent}')
     if tree.truncated:
         print('The walk stopped part way: the tree has too many categories', file=sys.stderr)
     if args.list:
@@ -175,10 +187,8 @@ def _tree(args: argparse.Namespace, wiki: Any) -> int:
     return 1 if tree.truncated else 0
 
 
-def _check(args: argparse.Namespace, wiki: Any) -> int:
-    from .bot import is_request_category
-    from .infobox import INFOBOX_PAGES, verdict
-    from .request import REQUEST_TEMPLATE, remove_requests
+def _check(args: argparse.Namespace, wiki: Any, task: Task) -> int:
+    from .request import remove_requests
     page = wiki.page(args.title)
     talk = page if page.isTalkPage() else page.toggleTalkPage()
     article = talk.toggleTalkPage()
@@ -186,38 +196,41 @@ def _check(args: argparse.Namespace, wiki: Any) -> int:
     if not article.exists() or article.isRedirectPage():
         print(f'{name}: ' + ('a redirect' if article.exists() else 'does not exist'))
         return 1
-    found = verdict(article.text, wiki.transcluding([name], INFOBOX_PAGES).get(name, set()),
-                    ignore=[REQUEST_TEMPLATE])
-    print(f'{name}: ' + (f'has an infobox ({found.evidence})' if found.has_infobox else
-                         found.review or 'no infobox'))
+    names = [task.request_template] + wiki.redirects_to(task.request_template)
+    found = task.check(wiki, [article], names)[name]
+    print(f'{name}: ' + (f'has {task.thing} ({found.evidence})' if found.found else
+                         f'for a human: {found.review}' if found.review else
+                         f'no {task.thing.split()[-1]}'
+                         + (f' ({found.evidence})' if found.evidence else '')))
     if not talk.exists():
         print(f'{talk.title()}: does not exist')
         return 0
-    names = [REQUEST_TEMPLATE] + wiki.redirects_to(REQUEST_TEMPLATE)
-    removal = remove_requests(talk.text, names)
-    print(f'{talk.title()}: ' + ('; '.join(removal.removed) or 'no infobox request found'))
+    removal = remove_requests(talk.text, names, params=task.request_params,
+                              template_params=task.template_params, details=task.details)
+    for particular in removal.specific:
+        print(f'{talk.title()}: for a human: {particular}')
+    print(f'{talk.title()}: ' + ('; '.join(removal.removed) or f'no {task.request} found'))
     if removal.changed:
         left = sorted(c for c in wiki.categories_with(talk.title(), removal.text)
-                      if is_request_category(c))
+                      if task.is_request_category(c))
         print('After removing it: ' + (f'still in {", ".join(left)}' if left
-                                       else 'in no infobox request category'))
+                                       else f'in no {task.request} category'))
     return 0
 
 
-def _run(args: argparse.Namespace, wiki: Any) -> int:
+def _run(args: argparse.Namespace, wiki: Any, task: Task) -> int:
     from .bot import Bot, Options
     options = Options(
-        live=args.live, trial=args.trial, category=_category_title(args.category),
+        task=task, live=args.live, trial=args.trial, category=_category_title(args.category),
         namespaces=tuple(args.namespace or (1,)), pages=tuple(args.page), limit=args.limit,
         max_edits=args.max_edits, run_page=args.run_page, report_page=args.report_page,
-        stop_file=args.stop_file, progress_minutes=args.progress_minutes,
-        brfa=BRFA if args.brfa is None else args.brfa, summary_suffix=args.summary_suffix,
-        out_dir=args.out_dir)
+        stop_file=args.stop_file, progress_minutes=args.progress_minutes, brfa=args.brfa,
+        summary_suffix=args.summary_suffix, out_dir=args.out_dir)
     bot = Bot(wiki, options)
     report = bot.run()
     verb = 'Changed' if report.live else 'Would change'
-    print(f'Checked {report.checked} talk page(s): {report.with_infobox} article(s) with an '
-          f'infobox, {report.without_infobox} without. {verb} {len(report.edits)}; '
+    print(f'Checked {report.checked} talk page(s): {report.fulfilled} article(s) with '
+          f'{task.thing}, {report.unfulfilled} without. {verb} {len(report.edits)}; '
           f'{len(report.reviews)} for manual review; {len(report.skipped)} skipped; '
           f'{len(report.errors)} error(s).')
     print(f'Report: {bot.report_path}')

@@ -39,9 +39,12 @@ INFOBOX_PAGES = (
 
 @dataclass(frozen=True)
 class Verdict:
-    has_infobox: bool
-    evidence: str = ''          # why the bot thinks it has one
+    """Whether an article has what its talk page asked for."""
+
+    found: bool
+    evidence: str = ''          # why the bot thinks it has it, or hasn't
     review: str | None = None   # why a human should look, instead
+    shown: str = ''             # what it found, for the edit summary
 
 
 def infobox_calls(text: str, ignore: Iterable[str] = ()) -> list[str]:

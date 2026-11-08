@@ -14,6 +14,18 @@ request off the talk page:
  }}
 ```
 
+It has two tasks, each with its own command and report page, that work the
+same way:
+
+| Command | Requests | The article must have | Report page |
+|---|---|---|---|
+| `infoboxsweep` | [Category:Wikipedia articles with an infobox request](https://en.wikipedia.org/wiki/Category:Wikipedia_articles_with_an_infobox_request) | an infobox | [User:ZackBot/InfoboxReport](https://en.wikipedia.org/wiki/User:ZackBot/InfoboxReport) |
+| `imagesweep` | [Category:Wikipedia requested photographs](https://en.wikipedia.org/wiki/Category:Wikipedia_requested_photographs) | a photograph of its subject (see [Photograph requests](#photograph-requests-imagesweep)) | [User:ZackBot/ImageReport](https://en.wikipedia.org/wiki/User:ZackBot/ImageReport) |
+
+Both take the same commands (`tree`, `check`, `run`) and options. Most of
+this README describes `infoboxsweep`; everything in it applies to
+`imagesweep` too, with photographs for infoboxes.
+
 **Every run is a dry run unless you add `--live`.** A dry run reads
 Wikipedia, saves nothing, and writes every edit it would have made to a text
 report in `out/`.
@@ -38,6 +50,11 @@ infoboxsweep run --limit 200
 
 # Dry run over the whole tree
 infoboxsweep run
+
+# The same for photograph requests
+imagesweep tree
+imagesweep check "Ohio Statehouse"
+imagesweep run --limit 200
 ```
 
 Set up `user-config.py` (see [Going live](#going-live)) even for dry runs:
@@ -139,6 +156,102 @@ These are only **skipped**, and listed in the local report:
 Articles **without** an infobox are just counted: their request still
 stands.
 
+## Photograph requests (imagesweep)
+
+`imagesweep` does for
+[Category:Wikipedia requested photographs](https://en.wikipedia.org/wiki/Category:Wikipedia_requested_photographs)
+what `infoboxsweep` does for infobox requests: it walks the whole tree, every
+subcategory however deep ("Wikipedia requested photographs in Ohio", "… of
+people", and so on), lists each talk page once, checks the article, and takes
+the request off the talk page when the article already has what was asked
+for. Subcategories are followed if their name has "photograph", "photo",
+"image" or "picture".
+
+### How the bot decides an article has a photograph
+
+Not every image will do. The {{Commons category}} icon, a locator map, a
+flag or a logo is not a photograph of the article's subject. The bot looks
+at **one image only: the article's lead image**, and asks three questions
+about it ([`infoboxsweep/photo.py`](infoboxsweep/photo.py)).
+
+**1. Which image? The one MediaWiki picks as the lead image.** MediaWiki's
+[PageImages](https://www.mediawiki.org/wiki/Extension:PageImages) extension
+chooses one image to represent each article: the image shown in search
+results, link previews and the Wikipedia apps. On the English Wikipedia it
+picks only from the **lead section**, above the first heading, which is where
+the infobox and any top image are. It never picks images marked
+`notpageimage`, as icons in navboxes, maintenance templates and
+{{Commons category}} are, and it prefers bigger images nearer the top. The
+bot reads its choice from the page's properties, 50 articles to a request:
+`page_image_free` for a free image, or failing that `page_image` for a
+non-free one. That puts your rule of thumb into practice: an image further
+down the article never counts, and an article with no lead image has no
+photograph.
+
+**2. Is it a photograph?** The bot reads the file's name, type and size
+(50 files to a request, from here or Commons):
+
+| The lead image | Verdict |
+|---|---|
+| Its name has a word that says it isn't a photo: `map`, `locator`, `location`, `flag`, `logo`, `wordmark`, `icon`, `seal`, `emblem`, `insignia`, `crest`, `coat of arms`, `signature`, `symbol`, `diagram`, `chart`, `plan`, `placeholder`, `silhouette`, `replace this image`, `screenshot`, `cover`, `poster` … (`NOT_PHOTO_WORDS`) | no photograph |
+| An SVG, or not an image at all (a video, a PDF, a sound file) | no photograph: photographs aren't SVGs |
+| Under 200 pixels on its longer side | no photograph: an icon |
+| A PNG or a GIF | **manual review**: these are mostly screenshots, scans and drawings, but sometimes photographs |
+| A JPEG (or TIFF, WebP, HEIF) | a photograph |
+
+Words are matched whole, so "Mapperley Park.jpg" isn't a map.
+
+**3. Is it free?** A photograph request almost always wants a free photo, so
+a non-free (fair-use) photograph goes to **manual review**, for a human to
+decide whether the request still stands.
+
+So the bot removes a request only when the article's lead image, chosen by
+MediaWiki from the top of the article or its infobox, is a free, full-size
+JPEG-type file whose name doesn't say it's a map, flag, logo or the like.
+That it shows the subject itself is taken from it being the lead image: what
+editors put at the top of the article, or in its infobox, to show what the
+article is about. `imagesweep check "Title"` shows the verdict, and why, for
+any article.
+
+**What "no photograph" means.** If the lead image is a map, a flag or an
+icon, or there's none, the request still stands: the page is counted, not
+changed and not listed.
+
+### Requests for something particular
+
+Some requests aren't for just any photo: `{{Image requested|the interior}}`,
+or a banner with `|photo-details=the dome at night` next to its
+`|needs-photo=yes`. A lead photo doesn't meet those, so the bot leaves them
+alone and lists the page for manual review. On {{Image requested}}, only
+`in=`, `in2=` … `in10=` (where the subject is, for the location
+subcategories), `date=`, `small=` and `nocat=` count as asking for nothing in
+particular.
+
+### What it takes off the talk page
+
+The same three kinds of request as for infoboxes: a banner parameter saying
+yes (`needs-photo`, `needs-image`, `image-needed`, `imageneeded`,
+`photo-needed`, `reqphoto`, … see `PHOTO` in
+[`infoboxsweep/tasks.py`](infoboxsweep/tasks.py)); {{Image requested}} or
+any of its redirects, such as {{Reqphoto}}; or the category added by hand.
+Then MediaWiki parses the talk page as it would be, and the bot saves only if
+it would leave every photograph request category. The edit summary names
+the photo:
+
+```wikitext
+Removing photograph request ({{Image requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests for approval/ZackBot 16|ZackBot 16]])
+```
+
+### Its report page
+
+Every live `imagesweep run` keeps its row on
+[User:ZackBot/ImageReport](https://en.wikipedia.org/wiki/User:ZackBot/ImageReport)
+exactly as described [below](#the-report-page-on-wikipedia) for
+InfoboxReport: a row added when the run starts, updated as it goes and
+finished at the end (started, finished, duration, categories, talk pages
+found, checked, changed, manual review, result), and a "Needs manual
+review" list of pages and errors.
+
 ## The report page on Wikipedia
 
 Every live run keeps a row about itself on
@@ -232,11 +345,12 @@ run.
 
 ## Going live
 
-The task needs its own approval at
+Each task needs its own approval at
 [Wikipedia:Bots/Requests for approval](https://en.wikipedia.org/wiki/Wikipedia:Bots/Requests_for_approval).
-The edit summaries link `Wikipedia:Bots/Requests for approval/ZackBot 15`:
-change `BRFA` in [`infoboxsweep/__init__.py`](infoboxsweep/__init__.py) to the
-request's real name once it's filed, or pass `--brfa`.
+The edit summaries link placeholders,
+`ZackBot 15` for infoboxes and `ZackBot 16` for photographs: change `BRFA`
+and `PHOTO_BRFA` in [`infoboxsweep/__init__.py`](infoboxsweep/__init__.py)
+to the requests' real names once they're filed, or pass `--brfa`.
 
 1. At [Special:BotPasswords](https://en.wikipedia.org/wiki/Special:BotPasswords),
    logged in as ZackBot, make a bot password named `infoboxsweep` with the
@@ -247,6 +361,7 @@ request's real name once it's filed, or pass `--brfa`.
 3. Make sure [User:ZackBot/Run](https://en.wikipedia.org/wiki/User:ZackBot/Run)
    says `yes`, and create
    [User:ZackBot/InfoboxReport](https://en.wikipedia.org/wiki/User:ZackBot/InfoboxReport)
+   and [User:ZackBot/ImageReport](https://en.wikipedia.org/wiki/User:ZackBot/ImageReport)
    with any text.
 4. Do a dry run, and check its report in `out/`:
 
@@ -281,15 +396,22 @@ Pywikibot at it, for every job. Add the `infoboxsweep` bot password to its
 Then add `source ~/InfoboxSweep/deploy/runibox.sh` to `~/.bashrc`, for:
 
 ```bash
-runibox                          # a live run over the whole tree, as the job "ibox"
+runibox                          # infoboxes: a live run over the whole tree, as the job "ibox"
 runibox --max-edits 10           # options go to infoboxsweep run
 runibox --dry-run --limit 500    # a dry run, as "dry-ibox"
 stopibox                         # stop "ibox" cleanly, and wait until it has reported
+
+runimages                        # photographs: the same, with imagesweep, as the job "images"
+runimages --dry-run --limit 500  # as "dry-images"
+stopimages                       # stop "images" cleanly
 ```
 
-Each job writes its log to `~/ibox.err` and its report to
-`~/InfoboxSweep/out/`. To run it every week,
-[`deploy/jobs.example.yaml`](deploy/jobs.example.yaml) has a scheduled job:
+Each job writes its log to `~/<job>.err` (`~/ibox.err`, `~/images.err`) and
+its report to `~/InfoboxSweep/out/`. The two tasks can run at the same time:
+they edit different talk pages' requests and report on different pages. To
+run them every week,
+[`deploy/jobs.example.yaml`](deploy/jobs.example.yaml) has a scheduled job
+for each:
 
 ```bash
 cp ~/InfoboxSweep/deploy/jobs.example.yaml ~/jobs.yaml   # or add it to the jobs.yaml you have
@@ -300,12 +422,16 @@ toolforge jobs load ~/jobs.yaml
 
 ```
 infoboxsweep [--lang en] [--family wikipedia] [-v] COMMAND ...
+imagesweep   [--lang en] [--family wikipedia] [-v] COMMAND ...
 ```
+
+Both take the same commands and options; `imagesweep`'s defaults are the
+photograph task's (its category, report page and approval).
 
 | Command | What it does |
 |---|---|
 | `tree` | Walks the category tree and prints what's in it: categories, depth, distinct pages, repeat listings, and subcategories not followed. `--list` prints every category and page. |
-| `check TITLE` | For one article (or its talk page): whether it has an infobox and why, what the bot would take off the talk page, and whether that would take it out of the request categories. Saves nothing. |
+| `check TITLE` | For one article (or its talk page): whether it has an infobox (or a photograph) and why, what the bot would take off the talk page, and whether that would take it out of the request categories. Saves nothing. |
 | `run` | The task. A dry run unless `--live` is given. |
 
 Options for `run`:
@@ -314,13 +440,13 @@ Options for `run`:
 |---|---|
 | `--live` | Edit for real. Needs `user-config.py`. |
 | `--trial` | Allow a live run without the bot flag, for approved BRFA trial edits. |
-| `--category TITLE` | The root of the tree. Default: `Category:Wikipedia articles with an infobox request`. Also taken by `tree`. |
+| `--category TITLE` | The root of the tree. Default: `Category:Wikipedia articles with an infobox request` (`imagesweep`: `Category:Wikipedia requested photographs`). Also taken by `tree`. |
 | `--page TITLE` | Only check this page (a talk page, or an article for its talk page), not the tree. Repeatable. |
 | `--namespace N` | Check talk pages in namespace N instead of 1. Repeatable. Dry runs only. |
 | `--limit N` | Stop after checking N talk pages. |
 | `--max-edits N` | Stop after N edits (or, in a dry run, after finding N). |
 | `--run-page TITLE` | The emergency-stop page. Default: `User:<account>/Run`. |
-| `--report-page TITLE` | The report page. Default: `User:<account>/InfoboxReport`. `""` turns it off. |
+| `--report-page TITLE` | The report page. Default: `User:<account>/InfoboxReport` (`imagesweep`: `User:<account>/ImageReport`). `""` turns it off. |
 | `--stop-file PATH` | Stop cleanly, still reporting on the wiki, once this file exists. `runibox` gives each job one, for `stopibox`. |
 | `--progress-minutes N` | How often a live run updates the report page as it goes. Default: 30. `0`: only at the start, after the walk, and at the end. |
 | `--brfa TITLE` | The bot approval linked from every edit summary. `""` leaves the link out. |
@@ -352,22 +478,25 @@ No ordinary test touches a real wiki: they use the fake wiki in
 
 ### Project layout
 
-A run goes `cli` → `bot`, which walks the tree (`tree`), checks each article
-(`infobox`), takes the request off its talk page (`request`), and writes the
-reports (`report`, `wikireport`). Only `wiki` talks to the wiki.
+A run goes `cli` → `bot`, which runs one of the tasks in `tasks`: it walks the
+tree (`tree`), checks each article (`infobox`, or `photo`), takes the request
+off its talk page (`request`), and writes the reports (`report`,
+`wikireport`). Only `wiki` talks to the wiki.
 
 | Path | Contents |
 |---|---|
 | `infoboxsweep/cli.py` | The command line. |
 | `infoboxsweep/bot.py` | A run: pre-flight checks, the page loop, checking with MediaWiki, saving, edit summaries, the report page. |
 | `infoboxsweep/tree.py` | Walking the category tree, every level, each page once. |
+| `infoboxsweep/tasks.py` | The two tasks: each one's category, request template and parameters, how it checks an article, its report page and wording. |
 | `infoboxsweep/infobox.py` | Whether an article has an infobox. |
-| `infoboxsweep/request.py` | Taking an infobox request off a talk page's wikitext. |
+| `infoboxsweep/photo.py` | Whether an article has a photograph of its subject. |
+| `infoboxsweep/request.py` | Taking a request off a talk page's wikitext. |
 | `infoboxsweep/report.py` | The text report of a run. |
 | `infoboxsweep/wikireport.py` | The report page on the wiki: the Runs table and the review list. |
 | `infoboxsweep/wiki.py` | Everything the bot asks of the wiki, through Pywikibot. |
 | `infoboxsweep/wikitext.py` | Small wikitext helpers. |
-| `deploy/` | `user-config.example.py`, the `runibox` and `stopibox` shortcuts, and an example scheduled job. |
+| `deploy/` | `user-config.example.py`, the `runibox`, `runimages`, `stopibox` and `stopimages` shortcuts, and example scheduled jobs. |
 | `tests/` | The test suite. `tests/fakes.py` is the fake wiki. |
 
 ## License

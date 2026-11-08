@@ -7,12 +7,14 @@ is, through others, its own subcategory) ends the walk there instead of
 going round for ever.  A page in more than one category is listed once, in
 the order first found.
 
-Only subcategories with "infobox" in their name are followed.  Every
-category in the tree has one ("Film articles needing infoboxes", "Wikipedia
-requested infoboxes in ..."); a category without one was most likely put in
-the tree by mistake, and following it could take the bot through thousands
-of pages that never asked for an infobox.  Such categories are listed on
-the report, for a human, and not followed.
+Only subcategories with one of the task's keywords in their name are
+followed: "infobox" for infobox requests, "photograph", "photo", "image" or
+"picture" for photograph requests.  Every category in those trees has one
+("Film articles needing infoboxes", "Wikipedia requested photographs in
+Ohio"); a category without one was most likely put in the tree by mistake,
+and following it could take the bot through thousands of pages that never
+asked for anything.  Such categories are listed on the report, for a human,
+and not followed.
 """
 
 import logging
@@ -46,14 +48,17 @@ class Tree:
 
 
 def follows(category: str) -> bool:
-    """Whether the walk goes into a subcategory: one about infoboxes."""
+    """Whether the walk goes into a subcategory, by default: one about
+    infoboxes."""
     return 'infobox' in category.lower()
 
 
 def walk(wiki: Wiki, root: str, *, max_categories: int = MAX_CATEGORIES,
-         check: Callable[[], None] = lambda: None) -> Tree:
+         check: Callable[[], None] = lambda: None,
+         follow: Callable[[str], bool] = follows) -> Tree:
     """The tree under root.  check is called before reading each category,
-    so that the run can be stopped as the walk goes."""
+    so that the run can be stopped as the walk goes; follow says which
+    subcategories to go into."""
     tree = Tree(root)
     seen_pages: set[str] = set()
     seen = {root}
@@ -77,11 +82,11 @@ def walk(wiki: Wiki, root: str, *, max_categories: int = MAX_CATEGORIES,
                 if sub in seen:
                     continue
                 seen.add(sub)
-                if follows(sub):
+                if follow(sub):
                     below.append(sub)
                 else:
-                    log.warning('Not following %s, in %s: no "infobox" in its name', sub,
-                                category)
+                    log.warning('Not following %s, in %s: not a category for these requests',
+                                sub, category)
                     tree.not_followed.append((sub, category))
         if below:
             depth += 1

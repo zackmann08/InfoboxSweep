@@ -1,25 +1,33 @@
-"""Taking an infobox request off a talk page.
+"""Taking a request off a talk page: for an infobox, or for a photograph.
 
-A talk page asks for an infobox in one of three ways, and the bot takes out
-each it finds:
+A talk page asks in one of three ways, and the bot takes out each it finds:
 
 - **A WikiProject banner's parameter**, the usual way:
-  ``{{WikiProject Film|class=Stub|needs-infobox=yes}}``.  Banners name it
-  differently (``needs-infobox``, ``needs_infobox``, ``infobox``, ...: see
-  REQUEST_PARAMS), and any value Module:Yesno reads as yes asks for one.
-  The parameter is removed, with the rest of the banner left as it was.
-  A parameter that doesn't say yes asks for nothing, and is left alone.
-- **{{Infobox requested}}**, or one of its redirects, on its own.  The
-  call is removed, and its line too if nothing else was on it.
+  ``{{WikiProject Film|class=Stub|needs-infobox=yes}}``, or
+  ``|needs-photo=yes``.  Banners name it differently (``needs-infobox``,
+  ``needs_infobox``, ``infobox``, ...: see the task's request_params), and
+  any value Module:Yesno reads as yes asks for one.  The parameter is
+  removed, with the rest of the banner left as it was.  A parameter that
+  doesn't say yes asks for nothing, and is left alone.
+- **The request template**, such as {{Infobox requested}} or {{Image
+  requested}}, or one of its redirects, on its own.  The call is removed,
+  and its line too if nothing else was on it.
 - **The category itself**, added by hand: ``[[Category:Wikipedia articles
   with an infobox request]]``, or any category in its tree.
 
-The bot then checks the result with MediaWiki (see Bot._verify): if the page
-would still be in one of the tree's categories, it is left for a human.
+A request that asks for something in particular, such as ``{{Image
+requested|interior}}``, or a banner with ``image-details=the interior``
+next to its ``needs-image=yes``, isn't met by just any infobox or
+photograph, so it's left alone, and noted in Removal.specific: the bot then
+leaves the page for a human.
+
+The bot then checks the result with MediaWiki (see Bot._still_requested): if
+the page would still be in one of the tree's categories, it is left for a
+human.
 """
 
 import re
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from contextlib import suppress
 from dataclasses import dataclass, field
 
@@ -28,14 +36,21 @@ from mwparserfromhell.nodes import Node, Template, Wikilink
 from mwparserfromhell.nodes.extras import Parameter
 from mwparserfromhell.wikicode import Wikicode
 
-from .wikitext import is_yes, normalize_param, normalize_template_name, normalize_title
+from .wikitext import (
+    is_blank,
+    is_yes,
+    normalize_param,
+    normalize_template_name,
+    normalize_title,
+)
 
 __all__ = ['REQUEST_TEMPLATE', 'REQUEST_PARAMS', 'Removal', 'remove_requests']
 
 REQUEST_TEMPLATE = 'Infobox requested'
 
 # WikiProject banners' names for "this article needs an infobox", as
-# normalize_param gives them (lower case, with hyphens).
+# normalize_param gives them (lower case, with hyphens).  The photograph
+# task's are in infoboxsweep.tasks.
 REQUEST_PARAMS = frozenset({
     'needs-infobox', 'needsinfobox', 'need-infobox', 'needinfobox',
     'infobox', 'infobox-needed', 'infoboxneeded', 'infobox-request', 'infoboxrequest',
@@ -52,7 +67,8 @@ _GONE_LINE_RE = re.compile(r'^[ \t]*' + re.escape(_GONE) + r'[ \t]*(?:\n|\Z)', r
 class Removal:
     original: str
     text: str
-    removed: list[str] = field(default_factory=list)   # what was taken out, described
+    removed: list[str] = field(default_factory=list)    # what was taken out, described
+    specific: list[str] = field(default_factory=list)   # requests for something particular
 
     @property
     def changed(self) -> bool:
@@ -60,27 +76,59 @@ class Removal:
 
 
 def remove_requests(text: str, request_templates: Iterable[str],
-                    categories: Iterable[str] = ()) -> Removal:
-    """text without its infobox requests.  request_templates are the names
-    {{Infobox requested}} goes by (it and its redirects), without the
-    Template: prefix; categories are the tree's, with Category:."""
+                    categories: Iterable[str] = (), *,
+                    params: Collection[str] = REQUEST_PARAMS,
+                    template_params: Collection[str] | None = None,
+                    details: Iterable[str] = ()) -> Removal:
+    """text without its requests.  request_templates are the names the
+    request template goes by (it and its redirects), without the Template:
+    prefix; categories are the tree's, with Category:; params are the
+    banners' request parameters.
+
+    template_params, if given, are the request template's parameters that
+    don't make it ask for anything in particular (such as where the subject
+    is); a call with any other is left alone.  details are words that, in
+    the name of another parameter of a banner asking for one, with a value,
+    make it ask for something in particular (image-details=the interior)."""
     names = {normalize_template_name(name) for name in request_templates}
     cats = {normalize_title(c.split(':', 1)[1]) for c in categories}
     code = mwparserfromhell.parse(text)
     removed: list[str] = []
+    specific: list[str] = []
     for node in code.filter(recursive=True):
         if isinstance(node, Template):
             name = normalize_template_name(node.name)
             if name in names:
+                extra = _particular(node, template_params)
+                if extra:
+                    specific.append(f'{{{{{name}}}}} asks for something particular: {extra}')
+                    continue
                 _replace(code, node)
                 removed.append(f'{{{{{name}}}}}')
             else:
-                removed += _remove_params(node, name)
+                gone, particular = _remove_params(node, name, params, tuple(details))
+                removed += gone
+                specific += particular
         elif isinstance(node, Wikilink) and _category_of(node) in cats:
             _replace(code, node)
             removed.append(f'[[{normalize_title(node.title).lstrip(":")}]]')
     new = _GONE_LINE_RE.sub('', str(code)).replace(_GONE, '')
-    return Removal(text, new if removed else text, removed)
+    return Removal(text, new if removed else text, removed, specific)
+
+
+def _particular(template: Template, allowed: Collection[str] | None) -> str | None:
+    """The first parameter, shown, of a request template's call that makes
+    it ask for something in particular: one not in allowed, with a value."""
+    if allowed is None:
+        return None
+    for param in template.params:
+        if is_blank(param.value):
+            continue
+        if not param.showkey or normalize_param(param.name) not in allowed:
+            shown = str(param.value).strip() if not param.showkey else (
+                f'{str(param.name).strip()}={str(param.value).strip()}')
+            return shown
+    return None
 
 
 def _replace(code: Wikicode, node: Node) -> None:
@@ -88,18 +136,27 @@ def _replace(code: Wikicode, node: Node) -> None:
         code.replace(node, _GONE)
 
 
-def _remove_params(template: Template, name: str) -> list[str]:
+def _remove_params(template: Template, name: str, params: Collection[str],
+                   details: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    """Take a banner's request parameters out; return what was removed, and
+    the requests left because the banner asks for something particular."""
+    asking = [p for p in template.params if p.showkey
+              and normalize_param(p.name) in params and is_yes(p.value)]
+    if not asking:
+        return [], []
+    extra = [p for p in template.params if p.showkey and p not in asking
+             and normalize_param(p.name) not in params and not is_blank(p.value)
+             and any(word in normalize_param(p.name) for word in details)]
+    if extra:
+        shown = f'{str(extra[0].name).strip()}={str(extra[0].value).strip()}'
+        return [], [f'{{{{{name}}}}} asks for something particular: {shown}']
     removed = []
-    for param in list(template.params):
-        if not param.showkey:
-            continue
-        key = normalize_param(param.name)
-        if key in REQUEST_PARAMS and is_yes(param.value):
-            shown = f'{str(param.name).strip()}={str(param.value).strip()}'
-            _tidy_before_removing(template, param)
-            template.remove(param, keep_field=False)
-            removed.append(f'{shown} from {{{{{name}}}}}')
-    return removed
+    for param in asking:
+        shown = f'{str(param.name).strip()}={str(param.value).strip()}'
+        _tidy_before_removing(template, param)
+        template.remove(param, keep_field=False)
+        removed.append(f'{shown} from {{{{{name}}}}}')
+    return removed, []
 
 
 def _tidy_before_removing(template: Template, param: Parameter) -> None:

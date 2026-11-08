@@ -5,7 +5,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from infoboxsweep import ROOT_CATEGORY
-from infoboxsweep.bot import Bot, edit_summary, is_request_category, next_mark
+from infoboxsweep.bot import Bot, edit_summary, next_mark
+from infoboxsweep.tasks import INFOBOX
 from infoboxsweep.wikireport import MARKER, REVIEW_START, review_lines
 from tests.fakes import (
     BIO_CATEGORY,
@@ -60,7 +61,7 @@ def test_dry_run(tmp_path):
     bot, report = run(wiki, tmp_path)
     assert not wiki.logged_in and wiki.saves == []
     assert report.categories == 2 and report.found == 3 and report.duplicates == 1
-    assert report.checked == 3 and report.with_infobox == 1 and report.without_infobox == 1
+    assert report.checked == 3 and report.fulfilled == 1 and report.unfulfilled == 1
     [edit] = report.edits
     assert edit.talk == 'Talk:Example' and not edit.saved
     assert edit.removed == ['needs-infobox=yes from {{WikiProject Film}}']
@@ -148,7 +149,7 @@ def test_other_namespaces_in_a_dry_run(tmp_path):
     wiki = FakeWiki().add(FakePage('Draft talk:X', FILM_TALK), FakePage('Draft:X', PLAIN_ARTICLE))
     wiki.tree(ROOT_CATEGORY, pages=['Draft talk:X'])
     _, report = run(wiki, tmp_path, namespaces=(1, 119))
-    assert report.checked == 1 and report.without_infobox == 1
+    assert report.checked == 1 and report.unfulfilled == 1
 
 
 def test_limit_and_max_edits(tmp_path):
@@ -468,6 +469,6 @@ def test_next_mark():
 
 
 def test_is_request_category():
-    assert is_request_category('Category:Wikipedia articles with an infobox request')
-    assert is_request_category('Category:Film articles needing infoboxes')
-    assert not is_request_category('Category:Infobox templates')
+    assert INFOBOX.is_request_category('Category:Wikipedia articles with an infobox request')
+    assert INFOBOX.is_request_category('Category:Film articles needing infoboxes')
+    assert not INFOBOX.is_request_category('Category:Infobox templates')

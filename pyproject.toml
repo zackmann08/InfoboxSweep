@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "infoboxsweep"
 version = "0.1.0"
-description = "Wikipedia bot that removes infobox requests from the talk pages of articles that already have an infobox"
+description = "Wikipedia bot that removes infobox and photograph requests from the talk pages of articles that already have them"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -19,6 +19,7 @@ dev = ["pytest", "ruff", "mypy", "coverage>=7.2", "pyyaml"]
 
 [project.scripts]
 infoboxsweep = "infoboxsweep.cli:main"
+imagesweep = "infoboxsweep.cli:images_main"
 
 [tool.setuptools]
 packages = ["infoboxsweep"]

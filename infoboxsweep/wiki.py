@@ -13,6 +13,8 @@ from typing import Any, Protocol
 
 import pywikibot
 
+from .photo import FileInfo, LeadImage
+
 log = logging.getLogger('infoboxsweep')
 
 # Pages whose text is loaded in one API request.  The API cuts off any
@@ -119,21 +121,50 @@ class Wiki:
         a request, through the API's prop=templates, asked only about the
         candidates.  Titles that transclude none are left out."""
         found: dict[str, set[str]] = {}
-        wanted = '|'.join(candidates)
+        for page in self._query_pages(titles, prop='templates', tllimit='max',
+                                      tltemplates='|'.join(candidates)):
+            used = {t['title'] for t in page.get('templates', [])}
+            if used:
+                found.setdefault(page['title'], set()).update(used)
+        return found
+
+    def _query_pages(self, titles: list[str], **params: Any) -> Iterator[dict[str, Any]]:
+        """The pages of a query about titles, BATCH to a request, following
+        continuation: each page as many times as the API gives it."""
         for start in range(0, len(titles), BATCH):
-            params: dict[str, Any] = {
-                'action': 'query', 'prop': 'templates', 'tllimit': 'max',
-                'titles': '|'.join(titles[start:start + BATCH]),
-                'tltemplates': wanted, 'formatversion': 2}
+            request: dict[str, Any] = {'action': 'query', 'formatversion': 2,
+                                       'titles': '|'.join(titles[start:start + BATCH]), **params}
             while True:
-                data = self.site.simple_request(**params).submit()
-                for page in data.get('query', {}).get('pages', []):
-                    used = {t['title'] for t in page.get('templates', [])}
-                    if used:
-                        found.setdefault(page['title'], set()).update(used)
+                data = self.site.simple_request(**request).submit()
+                yield from data.get('query', {}).get('pages', [])
                 if 'continue' not in data:
                     break
-                params.update(data['continue'])
+                request.update(data['continue'])
+
+    def lead_images(self, titles: list[str]) -> dict[str, LeadImage]:
+        """{title: its lead image} for those of titles that have one, as the
+        PageImages extension chose it from the lead section: the free one
+        (page_image_free) if there is one, or else the non-free one
+        (page_image)."""
+        found: dict[str, LeadImage] = {}
+        for page in self._query_pages(titles, prop='pageprops',
+                                      ppprop='page_image_free|page_image'):
+            props = page.get('pageprops', {})
+            free = props.get('page_image_free')
+            name = free or props.get('page_image')
+            if name:
+                found[page['title']] = LeadImage('File:' + name.replace('_', ' '), bool(free))
+        return found
+
+    def file_info(self, files: list[str]) -> dict[str, FileInfo]:
+        """{file: its type and size} for those of files (with File:) that
+        exist, here or on Commons."""
+        found: dict[str, FileInfo] = {}
+        for page in self._query_pages(files, prop='imageinfo', iiprop='mime|size'):
+            for info in page.get('imageinfo', [])[:1]:
+                found[page['title']] = FileInfo(str(info.get('mime', '')),
+                                                int(info.get('width', 0)),
+                                                int(info.get('height', 0)))
         return found
 
     def categories_with(self, title: str, text: str) -> set[str]:

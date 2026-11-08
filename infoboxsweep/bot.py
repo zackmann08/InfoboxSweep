@@ -1,16 +1,19 @@
-"""A run of the bot.
+"""A run of one of the bot's tasks (see infoboxsweep.tasks).
 
 1. In a live run: log in, check the account has the bot flag (unless it's a
-   trial), check the Run page says yes, and add the run's row to the report
-   page on the wiki (User:<account>/InfoboxReport).
-2. Walk the whole tree under Category:Wikipedia articles with an infobox
-   request, every subcategory however deep, and list every page in it once
-   (see infoboxsweep.tree).  Or, with --page, take only the pages given.
+   trial), check the Run page says yes, and add the run's row to the task's
+   report page on the wiki (User:<account>/InfoboxReport, or ImageReport).
+2. Walk the whole tree under the task's category, such as
+   Category:Wikipedia articles with an infobox request, every subcategory
+   however deep, and list every page in it once (see infoboxsweep.tree).
+   Or, with --page, take only the pages given.
 3. For each talk page, BATCH at a time, check the article it belongs to.
-   If the article has an infobox (see infoboxsweep.infobox), take the request
-   off the talk page (see infoboxsweep.request), check with MediaWiki that the
-   talk page leaves the tree's categories, and save it, or in a dry run,
-   record the edit it would have made.  Anything odd is left for a human.
+   If the article has what was asked for (an infobox, see
+   infoboxsweep.infobox, or a photograph, see infoboxsweep.photo), take the
+   request off the talk page (see infoboxsweep.request), check with
+   MediaWiki that the talk page leaves the tree's categories, and save it,
+   or in a dry run, record the edit it would have made.  Anything odd is
+   left for a human.
 4. Write the report to a text file.  In a live run, the bot also brings its
    row on the report page up to date as it goes, on the hour and the half
    hour, and at the end, with the pages left for manual review.
@@ -24,17 +27,17 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from . import BRFA, ROOT_CATEGORY
-from .infobox import INFOBOX_PAGES, verdict
+from .infobox import Verdict
 from .report import Edit, Report, unified_diff
-from .request import REQUEST_TEMPLATE, Removal, remove_requests
+from .request import Removal, remove_requests
+from .tasks import INFOBOX, Task
 from .tree import Tree, walk
 from .wiki import BATCH, Wiki, WikiPage
 from .wikireport import mark_interrupted, review_section, run_id, run_row, updated_page
 
 log = logging.getLogger('infoboxsweep')
 
-__all__ = ['Options', 'Bot', 'Stopped', 'edit_summary', 'RUN_WORDS', 'is_request_category']
+__all__ = ['Options', 'Bot', 'Stopped', 'edit_summary', 'RUN_WORDS']
 
 # What the Run page must say for a live run to start, or carry on.
 RUN_WORDS = ('yes', 'true', 'run', 'on')
@@ -48,18 +51,20 @@ TALK_NS = 1
 
 @dataclass(frozen=True)
 class Options:
+    task: Task = INFOBOX
     live: bool = False
     trial: bool = False                     # live without the bot flag, for a BRFA trial
-    category: str = ROOT_CATEGORY           # the root of the tree
+    category: str | None = None             # the root of the tree; default: the task's
     namespaces: tuple[int, ...] = (TALK_NS,)   # talk pages of articles only
     pages: tuple[str, ...] = ()             # only these pages, instead of the tree
     limit: int = 0                          # stop after checking this many pages; 0: no limit
     max_edits: int = 0                      # stop after this many edits; 0: no limit
     run_page: str | None = None             # default: User:<account>/Run
-    report_page: str | None = None          # default: User:<account>/InfoboxReport; '' for none
+    report_page: str | None = None          # default: User:<account>/<task's>; '' for none
     stop_file: Path | None = None           # the run stops, cleanly, once this exists
     progress_minutes: int = 30              # update the report page on these marks; 0: at the end
-    brfa: str = BRFA                        # linked from every edit summary; '' for none
+    brfa: str | None = None                 # linked from every edit summary; default: the
+                                            # task's; '' for none
     summary_suffix: str = ''                # added to every edit summary
     out_dir: Path = field(default_factory=lambda: Path('out'))
     failures_in_a_row: int = 5
@@ -93,22 +98,17 @@ def next_mark(after: datetime, minutes: int) -> datetime:
     return midnight + ((after - midnight) // step + 1) * step
 
 
-def is_request_category(category: str) -> bool:
-    """Whether a category, with Category:, is one for infobox requests, by
-    its name: for checking a talk page leaves them when the bot hasn't
-    walked the tree (with --page)."""
-    name = category.lower()
-    return 'infobox' in name and any(word in name for word in ('request', 'need'))
-
-
 class Bot:
     def __init__(self, wiki: Wiki, options: Options,
                  now: Callable[[], datetime] = _now) -> None:
         self.wiki = wiki
         self.options = options
+        self.task = options.task
+        self.category = options.category or self.task.root
+        self.brfa = self.task.brfa if options.brfa is None else options.brfa
         self.now = now
-        self.report = Report(options.live, now(), root=options.category)
-        self.request_names: list[str] = [REQUEST_TEMPLATE]
+        self.report = Report(options.live, now(), root=self.category, thing=self.task.thing)
+        self.request_names: list[str] = [self.task.request_template]
         self.tree_categories: set[str] = set()
         self.run_page: str | None = None
         self.started_live = False   # logged in, and the Run page said yes
@@ -172,7 +172,8 @@ class Bot:
     def _run(self) -> None:
         if self.options.live:
             self._preflight()
-        self.request_names = [REQUEST_TEMPLATE] + sorted(self.wiki.redirects_to(REQUEST_TEMPLATE))
+        template = self.task.request_template
+        self.request_names = [template] + sorted(self.wiki.redirects_to(template))
         titles = self._titles()
         done = 0
         for start in range(0, len(titles), BATCH):
@@ -223,8 +224,9 @@ class Bot:
         if self.options.pages:
             self.report.source = 'only the pages asked for (--page)'
             return list(dict.fromkeys(self._talk_title(t) for t in self.options.pages))
-        self.report.source = f'every page in the tree under [[:{self.options.category}]]'
-        tree = walk(self.wiki, self.options.category, check=self._check_operator_stop)
+        self.report.source = f'every page in the tree under [[:{self.category}]]'
+        tree = walk(self.wiki, self.category, check=self._check_operator_stop,
+                    follow=self.task.follows)
         self._note_tree(tree)
         if self.started_live:
             self._report_on_wiki(final=False, now=self.now())
@@ -246,24 +248,25 @@ class Bot:
         self.report.depth = tree.depth
         self.report.not_followed = tree.not_followed
         for category, parent in tree.not_followed:
-            self.report.review(category, '', f'a subcategory of {parent} without "infobox" in '
-                                             'its name: not followed. Is it in the right place?')
+            self.report.review(category, '', f'a subcategory of {parent} without '
+                               f'{self.task.keyword_text()} in its name: not followed. Is it in '
+                               'the right place?')
         if tree.truncated:
-            self.report.errors.append((self.options.category, 'the tree has more categories '
+            self.report.errors.append((self.category, 'the tree has more categories '
                                        'than the bot reads: only part of it was gone through'))
 
     # -- each batch of pages -----------------------------------------------
 
     def _process_batch(self, titles: list[str]) -> int:
         """Check BATCH talk pages: their text, their articles' text, and
-        which of the articles transclude an infobox, in three requests.
+        whether the articles have what was asked for, in a few requests.
         Returns how many of the titles it went through, which is fewer than
         all of them if --limit or --max-edits was reached."""
         try:
             pairs = list(self._pairs(titles))
-            articles = [article.title() for _, article in pairs
+            articles = [article for _, article in pairs
                         if article.exists() and not article.isRedirectPage()]
-            transcluded = self.wiki.transcluding(articles, INFOBOX_PAGES) if articles else {}
+            verdicts = self.task.check(self.wiki, articles, self.request_names) if articles else {}
         except Exception as error:   # noqa: BLE001 - the next batch may do better
             log.exception('Could not load the batch starting %s', titles[0])
             for title in titles:
@@ -274,7 +277,7 @@ class Bot:
         for talk, article in pairs:
             if self._limit_reached():
                 return index.get(talk.title(), 0)
-            self._process_safely(talk, article, transcluded.get(article.title(), set()))
+            self._process_safely(talk, article, verdicts.get(article.title()))
         return len(titles)
 
     def _pairs(self, titles: list[str]) -> Iterator[tuple[WikiPage, WikiPage]]:
@@ -300,10 +303,11 @@ class Bot:
         for talk, name in talks:
             yield talk, articles[name]
 
-    def _process_safely(self, talk: WikiPage, article: WikiPage, transcluded: set[str]) -> None:
+    def _process_safely(self, talk: WikiPage, article: WikiPage,
+                        found: Verdict | None) -> None:
         title = talk.title()
         try:
-            self._process(talk, article, transcluded)
+            self._process(talk, article, found)
         except Stopped:
             raise
         except Exception as error:   # noqa: BLE001 - one bad page mustn't stop the run
@@ -321,7 +325,7 @@ class Bot:
         if self.failures >= self.options.failures_in_a_row:
             raise Stopped(f'{self.failures} pages in a row failed') from error
 
-    def _process(self, talk: WikiPage, article: WikiPage, transcluded: set[str]) -> None:
+    def _process(self, talk: WikiPage, article: WikiPage, found: Verdict | None) -> None:
         title, name = talk.title(), article.title()
         self.report.checked += 1
         self.looked_at.add(title)
@@ -332,30 +336,36 @@ class Bot:
             self.report.review(title, name, 'the article is a redirect: should the talk page '
                                             'be one too?')
             return
-        found = verdict(article.text, transcluded, ignore=self.request_names)
+        assert found is not None
         if found.review:
             self.report.review(title, name, found.review)
             return
-        if not found.has_infobox:
-            self.report.without_infobox += 1
-            log.debug('%s: no infobox yet', name)
+        if not found.found:
+            self.report.unfulfilled += 1
+            log.debug('%s: not yet (%s)', name, found.evidence)
             return
-        self.report.with_infobox += 1
-        removal = remove_requests(talk.text, self.request_names, self.tree_categories)
-        if not removal.changed:
+        self.report.fulfilled += 1
+        task = self.task
+        removal = remove_requests(talk.text, self.request_names, self.tree_categories,
+                                  params=task.request_params,
+                                  template_params=task.template_params, details=task.details)
+        if removal.specific:
+            self.report.review(title, name, f'the article has {task.thing} ({found.evidence}), '
+                               'but ' + '; '.join(removal.specific))
+        elif not removal.changed:
             self._request_not_found(talk, name)
         elif not talk.botMayEdit():
             self.report.skip(title, 'excludes the bot with {{bots}} or {{nobots}}')
         elif self._still_requested(title, name, removal):
             return
         else:
-            self._edit(talk, name, removal, found.evidence)
+            self._edit(talk, name, removal, found)
 
     def _request_categories(self, title: str, text: str) -> list[str]:
         """The request categories the page title would be in with text, as
         MediaWiki parses it."""
         return sorted(c for c in self.wiki.categories_with(title, text)
-                      if c in self.tree_categories or is_request_category(c))
+                      if c in self.tree_categories or self.task.is_request_category(c))
 
     def _request_not_found(self, talk: WikiPage, article: str) -> None:
         """The bot can't see a request on the talk page.  If MediaWiki says
@@ -366,11 +376,12 @@ class Bot:
         title = talk.title()
         left = self._request_categories(title, talk.text)
         if not left:
-            self.report.skip(title, 'no longer asks for an infobox (the category listing was '
-                                    'out of date)')
+            self.report.skip(title, f'no longer asks for {self.task.thing} (the category '
+                                    'listing was out of date)')
             return
-        self.report.review(title, article, 'the article has an infobox, but the bot could not '
-                           'find the request on the talk page, which is in ' + ', '.join(left))
+        self.report.review(title, article, f'the article has {self.task.thing}, but the bot '
+                           'could not find the request on the talk page, which is in '
+                           + ', '.join(left))
 
     def _still_requested(self, title: str, article: str, removal: Removal) -> bool:
         """Check with MediaWiki that the talk page would leave the request
@@ -379,17 +390,18 @@ class Bot:
         left = self._request_categories(title, removal.text)
         if not left:
             return False
-        self.report.review(title, article, 'the article has an infobox, but after removing '
-                           + ', '.join(removal.removed) + ' the talk page would still be in '
-                           + ', '.join(left))
+        self.report.review(title, article, f'the article has {self.task.thing}, but after '
+                           'removing ' + ', '.join(removal.removed) + ' the talk page would '
+                           'still be in ' + ', '.join(left))
         return True
 
-    def _edit(self, talk: WikiPage, article: str, removal: Removal, evidence: str) -> None:
+    def _edit(self, talk: WikiPage, article: str, removal: Removal, found: Verdict) -> None:
         title = talk.title()
         summary = edit_summary(article, removal.removed, self.options.summary_suffix,
-                               brfa=self.options.brfa, trial=self.options.trial)
+                               brfa=self.brfa, trial=self.options.trial, task=self.task,
+                               shown=found.shown)
         edit = Edit(title, article, removal.removed, summary,
-                    unified_diff(title, removal.original, removal.text), evidence)
+                    unified_diff(title, removal.original, removal.text), found.evidence)
         if self.options.live:
             self._check_run_page()
             talk.text = removal.text
@@ -408,7 +420,7 @@ class Bot:
     def _report_page(self) -> str | None:
         if self.options.report_page == '':
             return None
-        return self.options.report_page or f'User:{self.report.account}/InfoboxReport'
+        return self.options.report_page or f'User:{self.report.account}/{self.task.report}'
 
     def _report_start(self) -> None:
         """Add this run's row to the report page as soon as it starts.  Rows
@@ -442,10 +454,9 @@ class Bot:
 
     def _intro(self) -> str:
         account = self.report.account
-        return (f"Runs of [[User:{account}|{account}]]'s task removing infobox requests from "
-                'the talk pages of articles that already have an infobox'
-                f'{_approval(self.options.brfa)}, newest first. It goes through every page in '
-                f'[[:{self.options.category}]] and all its subcategories. The bot adds a row '
+        return (f"Runs of [[User:{account}|{account}]]'s task {self.task.doing}"
+                f'{_approval(self.brfa)}, newest first. It goes through every page in '
+                f'[[:{self.category}]] and all its subcategories. The bot adds a row '
                 'when a live run starts, updates it as the run goes, and gives the final '
                 'numbers when the run ends. Pages it could not deal with on its own are listed '
                 'under [[#Needs manual review|Needs manual review]].')
@@ -565,15 +576,18 @@ def _approval(brfa: str) -> str:
 
 
 def edit_summary(article: str, removed: Iterable[str], suffix: str = '', *,
-                 brfa: str = BRFA, trial: bool = False) -> str:
+                 brfa: str | None = None, trial: bool = False, task: Task = INFOBOX,
+                 shown: str = '') -> str:
     """The edit summary: "Removing infobox request ({{Infobox requested}}):
     [[Foo]] has an infobox (ZackBot 15)", with what was removed, cut short
-    if there's too much."""
+    if there's too much, and what the article has, if shown."""
+    brfa = task.brfa if brfa is None else brfa
     head = 'BRFA trial: ' if trial else ''
     tail = f'{_approval(brfa)}' + (f' {suffix}' if suffix else '')
-    body = f': [[{article}]] has an infobox'
+    body = f': [[{article}]] has {task.thing}' + (f', {shown}' if shown else '')
+    action = f'Removing {task.request}'
     listed = '; '.join(removed)
-    room = SUMMARY_LIMIT - len(head) - len(body) - len(tail) - len('Removing infobox request ()')
+    room = SUMMARY_LIMIT - len(head) - len(body) - len(tail) - len(action) - len(' ()')
     if len(listed) > room:
         listed = listed[:max(0, room - 1)].rsplit('; ', 1)[0] + '; …'
-    return f'{head}Removing infobox request ({listed}){body}{tail}'
+    return f'{head}{action} ({listed}){body}{tail}'

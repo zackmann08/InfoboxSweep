@@ -160,3 +160,30 @@ def test_categories_with():
 def test_page():
     page = Wiki(StubSite({'Template:X': 'x'})).page('X', ns=10)
     assert page.title() == 'Template:X' and page.text == 'x'
+
+
+def test_lead_images():
+    from infoboxsweep.photo import LeadImage
+    site = StubSite()
+    site.responses = [{'query': {'pages': [
+        {'title': 'A', 'pageprops': {'page_image_free': 'Ohio_Statehouse.jpg',
+                                     'page_image': 'Ohio_Statehouse.jpg'}},
+        {'title': 'B', 'pageprops': {'page_image': 'Poster.jpg'}},
+        {'title': 'C', 'pageprops': {}}, {'title': 'D'}]}}]
+    assert Wiki(site).lead_images(['A', 'B', 'C', 'D']) == {
+        'A': LeadImage('File:Ohio Statehouse.jpg', True), 'B': LeadImage('File:Poster.jpg', False)}
+    [(_, params)] = site.calls
+    assert params['prop'] == 'pageprops' and params['ppprop'] == 'page_image_free|page_image'
+
+
+def test_file_info():
+    from infoboxsweep.photo import FileInfo
+    site = StubSite()
+    site.responses = [{'query': {'pages': [
+        {'title': 'File:A.jpg', 'imagerepository': 'shared',
+         'imageinfo': [{'mime': 'image/jpeg', 'width': 3000, 'height': 2000}]},
+        {'title': 'File:Gone.jpg', 'missing': True}]}}]
+    assert Wiki(site).file_info(['File:A.jpg', 'File:Gone.jpg']) == {
+        'File:A.jpg': FileInfo('image/jpeg', 3000, 2000)}
+    [(_, params)] = site.calls
+    assert params['prop'] == 'imageinfo' and params['iiprop'] == 'mime|size'

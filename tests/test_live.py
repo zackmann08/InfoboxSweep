@@ -50,3 +50,28 @@ def test_dry_run_over_a_few_pages(wiki, tmp_path):
     report = Bot(wiki, Options(pages=(talk,), out_dir=tmp_path)).run()
     assert report.checked == 1 and not report.errors and not report.stopped
     assert not any(edit.saved for edit in report.edits)
+
+
+# -- the photograph task ---------------------------------------------------------
+
+def test_the_photo_category_has_subcategories(wiki):
+    from infoboxsweep.tasks import PHOTO
+    subs = wiki.subcategories(PHOTO.root)
+    assert subs and any(PHOTO.follows(sub) for sub in subs)
+
+
+def test_lead_images_and_their_files(wiki):
+    from infoboxsweep.photo import photo_verdict
+    leads = wiki.lead_images(['Eiffel Tower', 'Albert Einstein'])
+    assert leads['Eiffel Tower'].free and leads['Eiffel Tower'].file.startswith('File:')
+    files = wiki.file_info([lead.file for lead in leads.values()])
+    lead = leads['Eiffel Tower']
+    assert files[lead.file].width > 200
+    assert photo_verdict(lead, files[lead.file]).found
+
+
+def test_dry_run_of_the_photo_task(wiki, tmp_path):
+    from infoboxsweep.tasks import PHOTO
+    talk = next(iter(wiki.category_pages(wiki.subcategories(PHOTO.root)[0])))
+    report = Bot(wiki, Options(task=PHOTO, pages=(talk,), out_dir=tmp_path)).run()
+    assert report.checked == 1 and not report.errors and not report.stopped

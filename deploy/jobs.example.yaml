@@ -13,3 +13,11 @@
   image: python3.13
   schedule: "17 5 * * 3"
   emails: onfailure
+
+# Photograph requests: every Saturday at 06:41.
+- name: images
+  command: >-
+    cd ~/InfoboxSweep && venv/bin/imagesweep run --live --stop-file stop/images
+  image: python3.13
+  schedule: "41 6 * * 6"
+  emails: onfailure

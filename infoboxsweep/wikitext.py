@@ -41,3 +41,8 @@ def normalize_param(name: object) -> str:
 def is_yes(value: object) -> bool:
     """True if a parameter value reads as yes, as Module:Yesno would."""
     return strip_comments(value).strip().lower() in YES
+
+
+def is_blank(value: object) -> bool:
+    """True if a parameter value is nothing but whitespace and comments."""
+    return not strip_comments(value).strip()
