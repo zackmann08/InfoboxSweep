@@ -208,8 +208,9 @@ def _check(args: argparse.Namespace, wiki: Any, task: Task) -> int:
     removal = remove_requests(talk.text, names, params=task.request_params,
                               template_params=task.template_params, details=task.details)
     for particular in removal.specific:
-        print(f'{talk.title()}: for a human: {particular}')
-    print(f'{talk.title()}: ' + ('; '.join(removal.removed) or f'no {task.request} found'))
+        print(f'{talk.title()}: request found, but left for a human: {particular}')
+    if removal.removed or not removal.specific:
+        print(f'{talk.title()}: ' + ('; '.join(removal.removed) or f'no {task.request} found'))
     if removal.changed:
         left = sorted(c for c in wiki.categories_with(talk.title(), removal.text)
                       if task.is_request_category(c))

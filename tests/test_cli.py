@@ -203,6 +203,21 @@ def test_imagesweep_check(photo_wiki, capsys):
     assert capsys.readouterr().out.startswith('Pending: no photograph (no lead image)\n')
 
 
+def test_imagesweep_check_kurt_cobain(monkeypatch, capsys):
+    from tests.test_bot_photo import cobain_wiki
+    wiki = cobain_wiki('{{Talk header}}\n{{Photo requested|musicians|people of Washington|'
+                       'reason=Current image and all other alternatives are very blurry and '
+                       'low-quality.}}\n')
+    monkeypatch.setattr(cli, '_connect', lambda args: wiki)
+    assert cli.images_main(['check', 'Kurt Cobain']) == 0
+    assert capsys.readouterr().out == (
+        'Kurt Cobain: has a photograph (lead image [[:File:Nirvana around 1992 (cropped).jpg]] '
+        '(JPEG, 260×346))\n'
+        'Talk:Kurt Cobain: request found, but left for a human: {{Photo requested}} asks for '
+        'something particular: reason=Current image and all other alternatives are very '
+        'blurry and low-quality.\n')
+
+
 def test_imagesweep_help():
     done = subprocess.run([sys.executable, '-c', 'import sys; from infoboxsweep.cli import '
                            'images_main; sys.exit(images_main(["--help"]))'],
