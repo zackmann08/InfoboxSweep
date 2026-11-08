@@ -16,6 +16,12 @@ two things:
    Module:Infobox, which nearly every infobox is built on, or one of the
    families (INFOBOX_PAGES), as MediaWiki reports.
 
+Some templates named "Infobox ..." aren't an article's infobox: {{Infobox
+designation list}} (or {{Designation list}}) is a box listing a place's
+heritage designations, as on Gosford House, which has no infobox.  Those in
+NOT_INFOBOXES never count, wherever they are, called by any name: an
+article whose only "infobox" is one of them has no infobox.
+
 Both: an infobox.  Neither: no infobox, and the request stands, even if the
 article transcludes Template:Infobox through something else.  Only one goes
 to a human: an infobox call that doesn't render (the template may be broken
@@ -31,14 +37,18 @@ import mwparserfromhell
 
 from .wikitext import normalize_template_name
 
-__all__ = ['INFOBOX_PAGES', 'INFOBOX_FAMILIES', 'Verdict', 'verdict', 'infobox_calls',
-           'lead_section', 'template_calls', 'is_infobox_name']
+__all__ = ['INFOBOX_PAGES', 'INFOBOX_FAMILIES', 'NOT_INFOBOXES', 'Verdict', 'verdict',
+           'infobox_calls', 'lead_section', 'template_calls', 'is_infobox_name']
 
 # Infoboxes not named "Infobox ...", without Template:.
 INFOBOX_FAMILIES = frozenset({
     'Taxobox', 'Automatic taxobox', 'Speciesbox', 'Subspeciesbox', 'Infraspeciesbox',
     'Hybridbox', 'Virusbox', 'Ichnobox', 'Oobox', 'Chembox', 'Drugbox',
 })
+
+# Templates named like infoboxes, or redirecting to one, that aren't an
+# article's infobox, without Template:.
+NOT_INFOBOXES = frozenset({'Infobox designation list', 'Designation list'})
 
 INFOBOX_PAGES = ('Template:Infobox', 'Module:Infobox',
                  *sorted(f'Template:{name}' for name in INFOBOX_FAMILIES))
@@ -77,7 +87,10 @@ def template_calls(text: str, ignore: Iterable[str] = ()) -> list[str]:
 
 
 def is_infobox_name(name: str) -> bool:
-    """Whether a template, by its name, is an infobox."""
+    """Whether a template, by its name, is an infobox: not one of
+    NOT_INFOBOXES."""
+    if name in NOT_INFOBOXES:
+        return False
     return name.lower().startswith('infobox') or name in INFOBOX_FAMILIES
 
 
@@ -88,10 +101,15 @@ def infobox_calls(text: str, ignore: Iterable[str] = (),
     requested}}.  resolved maps a template to the one it redirects to."""
     resolved = resolved or {}
     skip = {normalize_template_name(name) for name in ignore}
-    return [name for name in template_calls(text, ignore)
-            if is_infobox_name(name) or (resolved.get(name) is not None
-                                          and is_infobox_name(resolved[name])
-                                          and resolved[name] not in skip)]
+    found = []
+    for name in template_calls(text, ignore):
+        target = resolved.get(name)
+        if target is not None:   # a redirect: what it is depends on its target
+            if is_infobox_name(target) and target not in skip:
+                found.append(name)
+        elif is_infobox_name(name):
+            found.append(name)
+    return found
 
 
 def verdict(text: str, transcluded: Collection[str], ignore: Iterable[str] = (),

@@ -107,7 +107,10 @@ all do. So the article **has an infobox** only if both of these hold:
    film}}, looked up on the wiki), or one of the infobox families named
    otherwise: the taxoboxes, {{Chembox}}, {{Drugbox}} (`INFOBOX_FAMILIES`).
    Calls in comments or `<nowiki>` don't count, nor does {{Infobox
-   requested}}.
+   requested}}. Nor does {{Infobox designation list}} ({{Designation
+   list}}, or any other name for it): it lists a place's heritage
+   designations, as on Gosford House, and isn't the article's infobox, so an
+   article whose only "infobox" it is has none (`NOT_INFOBOXES`).
 2. **It renders.** The article transcludes Template:Infobox or
    [Module:Infobox](https://en.wikipedia.org/wiki/Module:Infobox), which
    nearly every infobox is built on, or one of the families

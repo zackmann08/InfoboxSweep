@@ -92,3 +92,12 @@ def test_no_infobox_though_it_transcludes_template_infobox(wiki):
     assert not found.found, found.evidence
     paris = next(iter(wiki.load(['Paris'])))
     assert INFOBOX.check(wiki, [paris], ['Infobox requested'])['Paris'].found
+
+
+def test_a_designation_list_is_not_an_infobox(wiki):
+    # Gosford House has {{Infobox designation list}} in its lead, and no
+    # infobox.
+    from infoboxsweep.tasks import INFOBOX
+    page = next(iter(wiki.load(['Gosford House'])))
+    found = INFOBOX.check(wiki, [page], ['Infobox requested'])['Gosford House']
+    assert not found.found, found.evidence

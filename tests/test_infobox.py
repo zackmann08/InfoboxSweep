@@ -108,6 +108,30 @@ def test_calls():
     assert not is_infobox_name('Sidebar') and not is_infobox_name('External media')
 
 
+def test_designation_lists_are_not_infoboxes():
+    # As on Gosford House: a box of heritage designations in the lead, and
+    # no infobox.
+    gosford = ("{{Use British English|date=May 2015}}\n{{Infobox designation list\n"
+               "| embed = \n| designation1 = Listed building\n}}\n"
+               "'''Gosford House''' is a neo-classical house.\n== History ==\n")
+    for text in (gosford, gosford.replace('Infobox designation list', 'designation list')):
+        found = verdict(text, RENDERS)
+        assert not found.found and found.review is None
+        assert found.evidence.startswith('no infobox in the lead section')
+    # Another name for it, by redirect.
+    found = verdict('{{Infobox heritage designations}}\nText', RENDERS,
+                    resolved={'Infobox heritage designations': 'Infobox designation list'})
+    assert not found.found and found.review is None
+    # Below the lead, it isn't an infobox for a section either.
+    assert verdict("Text\n== A ==\n{{Infobox designation list}}", RENDERS).review is None
+    # With a real infobox, the article has one.
+    found = verdict('{{Infobox building\n|name=X}}\n{{Infobox designation list}}\nText',
+                    RENDERS)
+    assert found.found and found.evidence.startswith('{{Infobox building}}')
+    assert not is_infobox_name('Infobox designation list')
+    assert not is_infobox_name('Designation list')
+
+
 def test_check_infoboxes_resolves_only_what_it_must():
     asked = []
     wiki = FakeWiki(FakePage('Named', '{{Infobox film}}\nText'),
@@ -122,8 +146,8 @@ def test_check_infoboxes_resolves_only_what_it_must():
                                                         'Plain')], ['Infobox requested'])
     assert found['Named'].found and found['Renamed'].found
     assert not found['Beat Generation'].found and not found['Plain'].found
-    # Only the templates of the articles that render an infobox without
-    # naming one, each once.
+    # Only the lead templates of the articles that render an infobox, each
+    # once, in one request.
     [names] = asked
-    assert names[:2] == ['Film infobox', 'Use dmy dates']
-    assert 'Infobox film' not in names and 'Short description' in names
+    assert names[:3] == ['Infobox film', 'Film infobox', 'Use dmy dates']
+    assert 'Short description' in names and len(names) == len(set(names))
