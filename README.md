@@ -525,5 +525,4 @@ off its talk page (`request`), and writes the reports (`report`,
 
 ## License
 
-GNU General Public License v3.0, as for ZackBotPy, from which parts of the
-code are adapted. See [LICENSE](LICENSE).
+GNU General Public License v3.0. See [LICENSE](LICENSE).
