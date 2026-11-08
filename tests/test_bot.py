@@ -296,19 +296,32 @@ def test_marks_runs_that_died(tmp_path):
     assert wiki.report_page.text.startswith('Intro\n')   # kept as it was
 
 
-def test_a_partial_run_keeps_the_others_on_the_review_list(tmp_path):
+def test_each_run_starts_the_review_list_afresh(tmp_path):
     wiki = film_wiki()
     wiki.report_page.text = (
-        'Intro\n' + MARKER + '\n|}\n' + REVIEW_START + '\nUpdated.\n'
-        '{| class="wikitable sortable"\n! Page !! Article !! Why\n'
+        'Intro\n' + MARKER + '\n|}\n\n== Needs manual review ==\n' + REVIEW_START
+        + '\nUpdated.\n{| class="wikitable sortable"\n! Page !! Article !! Why\n'
         '|-\n| [[:Talk:Elsewhere]] || [[Elsewhere]] || <nowiki>old</nowiki>\n'
-        '|-\n| [[:Talk:Example]] || [[Example]] || <nowiki>fixed since</nowiki>\n'
         '|}\n<!-- InfoboxSweep review end -->\n')
-    run(wiki, tmp_path, live=True, progress_minutes=0, pages=('Talk:Example', 'Talk:Gone'))
-    assert sorted(review_lines(wiki.report_page.text)) == ['Talk:Elsewhere', 'Talk:Gone']
-    # A complete run replaces the list.
-    run(wiki, tmp_path, live=True, progress_minutes=0)
+    starts = []
+    real = wiki.report_page.save
+
+    def save(**kwargs):
+        if kwargs['summary'].startswith('Starting'):
+            starts.append(wiki.report_page.text)
+        real(**kwargs)
+    wiki.report_page.save = save
+    run(wiki, tmp_path, live=True, progress_minutes=0, pages=('Talk:Example',))
+    # Cleared as the run starts, earlier runs' pages and all.
+    [started] = starts
+    assert review_lines(started) == {} and 'is going. The pages it leaves' in started
+    assert started.count('== Needs manual review ==') == 1
+    # Then only this run's pages: Talk:Example needed none.
+    assert review_lines(wiki.report_page.text) == {}
+    assert 'No pages need manual review.' in wiki.report_page.text
+    run(wiki, tmp_path, live=True, progress_minutes=0, pages=('Talk:Gone',))
     assert sorted(review_lines(wiki.report_page.text)) == ['Talk:Gone']
+    assert wiki.report_page.text.count('== Needs manual review ==') == 1
 
 
 def test_no_report_page(tmp_path):

@@ -31,23 +31,25 @@ with any errors:
     |}
     <!-- InfoboxSweep review end -->
 
-A run that went through every page replaces the list.  Any other (one with
---limit, say, or stopped part way), and every progress report, changes only
-the pages it looked at, so the rest stay listed.
+The list is the current run's: a run clears it as it starts, and fills it
+as it goes, with each progress report and at the end.  The bot finds the
+section by its heading, or its markers if the heading has gone, so a hand
+edit that deletes the markers with the old list doesn't make it add a
+second section; any second one is taken out.
 
 Everything above the Runs table's marker, and everything outside the review
-markers, is kept as it is, so the introduction can be edited by hand.
+section, is kept as it is, so the introduction can be edited by hand.
 """
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 from .report import Report
 
 __all__ = ['MARKER', 'MAX_ROWS', 'MAX_REVIEWS', 'REVIEW_START', 'REVIEW_END', 'updated_page',
            'run_row', 'run_id', 'duration', 'mark_interrupted', 'review_section',
-           'review_lines']
+           'review_starting', 'review_lines']
 
 MARKER = '<!-- InfoboxSweep: new runs go below this line -->'
 REVIEW_START = '<!-- InfoboxSweep review start -->'
@@ -81,12 +83,55 @@ def updated_page(old: str | None, row: str, *, review: str | None, header: str,
     text = head + MARKER + '\n' + ''.join(r.rstrip('\n') + '\n' for r in rows) + _TABLE_END + tail
     if review is None:
         return text
-    if REVIEW_START in text and REVIEW_END in text.split(REVIEW_START, 1)[1]:
-        before, rest = text.split(REVIEW_START, 1)
-        after = rest.split(REVIEW_END, 1)[1]
-        return before + REVIEW_START + '\n' + review.strip('\n') + '\n' + REVIEW_END + after
-    return (text.rstrip('\n') + f'\n\n{REVIEW_HEADING}\n{REVIEW_START}\n'
-            + review.strip('\n') + f'\n{REVIEW_END}\n')
+    return _with_review(text, review)
+
+
+# The review section, found by its heading: up to the next == heading ==.
+_REVIEW_SECTION_RE = re.compile(r'^==[ \t]*Needs manual review[ \t]*==[ \t]*$.*?(?=^==[^=]|\Z)',
+                                re.MULTILINE | re.DOTALL)
+# And by its markers, if its heading has gone: the markers and what's between.
+_REVIEW_BLOCK_RE = re.compile(re.escape(REVIEW_START) + r'.*?' + re.escape(REVIEW_END)
+                              + r'[ \t]*\n?', re.DOTALL)
+_REVIEW_MARKER_RE = re.compile(r'^[ \t]*(?:' + re.escape(REVIEW_START) + '|'
+                               + re.escape(REVIEW_END) + r')[ \t]*\n?', re.MULTILINE)
+
+
+def _with_review(text: str, review: str) -> str:
+    """text with one review section, holding review: in place of the first
+    "Needs manual review" section, found by its heading or its markers, and
+    with any others, left by hand edits, taken out.  So a section whose
+    markers were deleted with its old list, or whose heading was, is still
+    the one the bot updates, and there's never a second.  Text added by hand
+    in the section, outside its markers, is kept; in a section that has lost
+    its markers, the old list is replaced."""
+    contents = f'{REVIEW_START}\n{review.strip(chr(10))}\n{REVIEW_END}\n'
+    placed = False
+
+    def first(match: re.Match[str]) -> str:
+        nonlocal placed
+        if placed:
+            return ''
+        placed = True
+        found = match.group(0)
+        if not found.startswith('=='):          # markers only: no heading
+            return f'{REVIEW_HEADING}\n{contents}\n'
+        body = found.split('\n', 1)[1] if '\n' in found else ''
+        markers = _REVIEW_BLOCK_RE.search(body)
+        if markers is None:                     # heading only: the old list goes
+            return f'{REVIEW_HEADING}\n{contents}\n'
+        return (f'{REVIEW_HEADING}\n{body[:markers.start()]}{contents}'
+                f'{body[markers.end():].rstrip(chr(10))}\n\n')
+
+    text = _REVIEW_SECTION_RE.sub(first, text)
+    if not placed:
+        text = _REVIEW_BLOCK_RE.sub(first, text, count=1)
+    if not placed:
+        text = _REVIEW_MARKER_RE.sub('', text).rstrip('\n')
+        return f'{text}\n\n{REVIEW_HEADING}\n{contents}'
+    # Markers left elsewhere, by a hand edit: the bot's section is the one above.
+    head, sep, rest = text.partition(REVIEW_END)
+    rest = _REVIEW_MARKER_RE.sub('', _REVIEW_BLOCK_RE.sub('', rest))
+    return (head + sep + rest).rstrip('\n') + '\n'
 
 
 def _has_table(text: str) -> bool:
@@ -239,23 +284,27 @@ def _review_line(title: str, article: str, why: str) -> str:
     return f'| [[:{title}]] || {link} || <nowiki>{why.replace("<", "&lt;")}</nowiki>'
 
 
-def review_section(old: str | None, *, found: Mapping[str, tuple[str, str]],
-                   looked_at: Iterable[str], complete: bool, when: datetime,
-                   started: datetime) -> str:
-    """The review section's contents.  found is {page: (article, why)}, for
-    the pages the run left for a human.  If complete, it is the whole list;
-    otherwise it replaces only the pages in looked_at, and the old text's
-    others stay listed."""
-    lines = {} if complete else review_lines(old)
-    for title in looked_at:
-        lines.pop(title, None)
-    for title, (article, why) in found.items():
-        lines[title] = _review_line(title, article, why)
+def review_starting(started: datetime) -> str:
+    """The review section's contents as a run starts: cleared, for the
+    run's own list."""
+    return (f'The run that started {_when(started)} (UTC) is going. The pages it leaves for '
+            'manual review will be listed here as it finds them.')
+
+
+def review_section(*, found: Mapping[str, tuple[str, str]], when: datetime,
+                   started: datetime, final: bool = True) -> str:
+    """The review section's contents: the pages this run has left for a
+    human, found is {page: (article, why)}, and nothing from earlier runs,
+    each of which starts the list afresh.  Not final: so far."""
+    lines = {title: _review_line(title, article, why)
+             for title, (article, why) in found.items()}
     count = len(lines)
+    need = 'need' if final else 'need, so far,'
+    needs = 'needs' if final else 'needs, so far,'
     text = (f'Updated {_when(when)} (UTC), by the run that started {_when(started)}. '
-            + ('No pages need manual review.' if not count else
-               '1 page needs manual review.' if count == 1 else
-               f'{count:,} pages need manual review.'))
+            + (f'No pages {need} manual review.' if not count else
+               f'1 page {needs} manual review.' if count == 1 else
+               f'{count:,} pages {need} manual review.'))
     if not lines:
         return text
     shown = sorted(lines)[:MAX_REVIEWS]

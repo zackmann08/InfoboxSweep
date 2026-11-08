@@ -14,6 +14,7 @@ from infoboxsweep.wikireport import (
     mark_interrupted,
     review_lines,
     review_section,
+    review_starting,
     run_id,
     run_row,
     updated_page,
@@ -114,35 +115,76 @@ def test_mark_interrupted():
 def test_review_section():
     when = START + timedelta(hours=1)
     found = {'Talk:B': ('B', 'the article <i>is</i> a redirect'), 'Category:X': ('', 'odd')}
-    text = review_section(None, found=found, looked_at=['Talk:B'], complete=True, when=when,
-                          started=START)
+    text = review_section(found=found, when=when, started=START)
     assert text == (
         'Updated 2026-11-07 05:23 (UTC), by the run that started 2026-11-07 04:23. 2 pages need '
         'manual review.\n{| class="wikitable sortable"\n! Page !! Article !! Why\n'
         '|-\n| [[:Category:X]] || — || <nowiki>odd</nowiki>\n'
         '|-\n| [[:Talk:B]] || [[B]] || <nowiki>the article &lt;i>is&lt;/i> a redirect</nowiki>\n'
         '|}')
-    old = page(review=text)
-    assert set(review_lines(old)) == {'Category:X', 'Talk:B'}
-    # A partial run: only the pages it looked at change.
-    partial = review_section(old, found={'Talk:C': ('C', 'new')}, looked_at=['Talk:B', 'Talk:C'],
-                             complete=False, when=when, started=START)
-    assert set(review_lines(page(review=partial))) == {'Category:X', 'Talk:C'}
-    one = review_section(old, found={}, looked_at=['Talk:B'], complete=False, when=when,
-                         started=START)
-    assert '1 page needs manual review.' in one
-    none = review_section(old, found={}, looked_at=[], complete=True, when=when, started=START)
+    assert set(review_lines(page(review=text))) == {'Category:X', 'Talk:B'}
+    one = review_section(found={'Talk:C': ('C', 'new')}, when=when, started=START, final=False)
+    assert '1 page needs, so far, manual review.' in one
+    none = review_section(found={}, when=when, started=START)
     assert none.endswith('No pages need manual review.')
+    assert 'so far' in review_section(found={}, when=when, started=START, final=False)
     assert review_lines(None) == {} and review_lines('no markers') == {}
+    assert review_starting(START) == (
+        'The run that started 2026-11-07 04:23 (UTC) is going. The pages it leaves for manual '
+        'review will be listed here as it finds them.')
 
 
 def test_a_long_review_list_is_cut_short():
     found = {f'Talk:{i:05}': (f'{i}', 'x') for i in range(MAX_REVIEWS + 5)}
-    text = review_section(None, found=found, looked_at=[], complete=True, when=START,
-                          started=START)
+    text = review_section(found=found, when=START, started=START)
     assert text.count('|-\n') == MAX_REVIEWS
     assert f'{MAX_REVIEWS + 5:,} pages need manual review.' in text
     assert "the bot's local report has the rest" in text
+
+
+ROW = '|- data-run="x"\n| X\n'
+
+
+def section_count(text):
+    return text.count('== Needs manual review ==')
+
+
+def test_a_section_whose_markers_were_deleted_by_hand():
+    # As on User:ZackBot/InfoboxReport: someone cleared the old list with a
+    # section edit, markers and all.  The bot must use that section, not add
+    # a second.
+    old = page().replace(f'{REVIEW_START}\nNo pages yet.\n{REVIEW_END}\n', 'Cleared by hand.\n')
+    assert REVIEW_START not in old and section_count(old) == 1
+    text = updated_page(old, ROW, review='New list.', header='', intro='')
+    assert section_count(text) == 1
+    assert f'== Needs manual review ==\n{REVIEW_START}\nNew list.\n{REVIEW_END}\n' in text
+    # Without its markers, the bot can't tell the old list from anything else
+    # in the section, so the section is replaced up to the next heading.
+    assert 'Cleared by hand.' not in text and 'Footer.' not in text
+
+
+def test_duplicate_sections_are_merged_into_one():
+    # A page that already has the duplicate, as the bug left it.
+    old = page(review='Old list.') + (f'\n== Needs manual review ==\n{REVIEW_START}\n'
+                                      f'Another old list.\n{REVIEW_END}\n')
+    assert section_count(old) == 2
+    text = updated_page(old, ROW, review='New list.', header='', intro='')
+    assert section_count(text) == 1 and text.count(REVIEW_START) == 1
+    assert 'New list.' in text and 'Old list.' not in text and 'Another old' not in text
+
+
+def test_markers_without_their_heading():
+    old = page().replace('== Needs manual review ==\n', '')
+    text = updated_page(old, ROW, review='New list.', header='', intro='')
+    assert section_count(text) == 1 and text.count(REVIEW_START) == 1
+    assert f'== Needs manual review ==\n{REVIEW_START}\nNew list.' in text
+
+
+def test_the_section_keeps_what_follows_it():
+    old = page() + '\n== Notes ==\nKept.\n'
+    text = updated_page(old, ROW, review='New list.', header='', intro='')
+    assert text.endswith(f'{REVIEW_START}\nNew list.\n{REVIEW_END}\nFooter.\n\n== Notes ==\n'
+                         'Kept.\n')
 
 
 def test_duration():

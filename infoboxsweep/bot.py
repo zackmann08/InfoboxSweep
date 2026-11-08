@@ -33,7 +33,14 @@ from .request import Removal, remove_requests, topics_of
 from .tasks import INFOBOX, Task
 from .tree import Tree, walk
 from .wiki import BATCH, Wiki, WikiPage
-from .wikireport import mark_interrupted, review_section, run_id, run_row, updated_page
+from .wikireport import (
+    mark_interrupted,
+    review_section,
+    review_starting,
+    run_id,
+    run_row,
+    updated_page,
+)
 
 log = logging.getLogger('infoboxsweep')
 
@@ -114,7 +121,6 @@ class Bot:
         self.run_page: str | None = None
         self.started_live = False   # logged in, and the Run page said yes
         self.next_progress: datetime | None = None
-        self.looked_at: set[str] = set()   # the pages checked, for the review list
         self.report_path: Path | None = None
         self.stopped_by: Stopped | None = None
         self.stop_requested = False   # SIGTERM
@@ -328,7 +334,6 @@ class Bot:
     def _process(self, talk: WikiPage, article: WikiPage, found: Verdict | None) -> None:
         title, name = talk.title(), article.title()
         self.report.checked += 1
-        self.looked_at.add(title)
         if not article.exists():
             self.report.review(title, name, 'the article does not exist')
             return
@@ -434,7 +439,8 @@ class Bot:
         return self.options.report_page or f'User:{self.report.account}/{self.task.report}'
 
     def _report_start(self) -> None:
-        """Add this run's row to the report page as soon as it starts.  Rows
+        """Add this run's row to the report page as soon as it starts, and
+        clear the review list, for this run's own.  Rows
         of earlier runs that still say running, but haven't reported for two
         progress intervals (at least two hours), died without saying so (a
         Toolforge job killed, say): they're marked as interrupted."""
@@ -450,8 +456,8 @@ class Bot:
             nonlocal marked
             old, marked = mark_interrupted(old, run=run_id(self.report),
                                            stale_before=stale_before)
-            return updated_page(old, row, review=None, header=self._header(),
-                                intro=self._intro())
+            return updated_page(old, row, review=review_starting(self.report.started),
+                                header=self._header(), intro=self._intro())
 
         def summary() -> str:
             earlier = (f'; marked {marked} earlier run' + ('s' if marked > 1 else '')
@@ -499,14 +505,11 @@ class Bot:
         result = (self._abort_note() if aborted else
                   f'{OPERATOR_STOP} at {now:%Y-%m-%d %H:%M}' if by_operator else None)
         row = run_row(self.report, now=now, result=result)
-        complete = (final and not self.report.stopped and not self.report.ended_early
-                    and not self.options.pages)
         found = self._review_entries()
 
         def text(old: str | None) -> str:
             review = None if stop is not None else review_section(
-                old, found=found, looked_at=self.looked_at, complete=complete, when=now,
-                started=self.report.started)
+                found=found, when=now, started=self.report.started, final=final)
             return updated_page(old, row, review=review, header=self._header(),
                                 intro=self._intro())
 

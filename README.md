@@ -344,20 +344,27 @@ Updated 2026-11-04 09:41 (UTC), by the run that started 2026-11-04 05:17. 17 pag
   talk pages it checked and how many it changed, how many need manual review,
   and how it ended (finished, finished early as asked, stopped, and why),
   with the number of errors.
-- **The review list.** A run that went through every page replaces the
-  list. One that didn't (`--page`, `--limit`, `--max-edits`, or stopped part
-  way), and every progress report, changes only the pages it looked at, so
-  the others stay listed. At most 2,000 are shown; the local report has them
-  all. Errors are listed with the pages for review.
+- **The review list is the current run's.** A run clears the "Needs manual
+  review" section as it starts, then lists the pages it leaves for a human
+  as it finds them, with each progress report ("so far") and at the end.
+  Earlier runs' lists are gone; each run's row on the table keeps its count,
+  and its local report the full list. At most 2,000 are shown on the page.
+  Errors are listed with the pages for review.
 - **Rows.** Each row's hidden `data-run` says which run it is, so a run
   updates its own. New runs go at the top. The table keeps the 100 newest.
 - **Runs that died.** A run whose job was killed can't finish its row, which
   goes on saying "running". When the next run starts, it marks rows that
   haven't been updated for two hours as "interrupted".
 - **Editing by hand.** Everything above the
-  `<!-- InfoboxSweep: new runs go below this line -->` line, below the table,
-  and outside the review markers is kept as it is. If the line or the table
-  is gone, the bot starts the page again.
+  `<!-- InfoboxSweep: new runs go below this line -->` line, and other
+  sections, are kept as they are. If that line or the table is gone, the bot
+  starts the page again. The bot finds its review section by the heading
+  "Needs manual review", or by its hidden
+  `<!-- InfoboxSweep review start/end -->` markers if the heading has gone.
+  Text added in the section outside the markers is kept. If the markers have
+  been deleted (say, clearing the old list by hand), the bot replaces the
+  section, up to the next heading, and adds them back. Any second "Needs
+  manual review" section is taken out, so there's only ever one.
 - **Failures.** If the page can't be saved at the end of a run, that's an
   error in the local report, and the run exits with 1. An edit conflict is
   tried again.
