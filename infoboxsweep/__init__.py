@@ -6,8 +6,7 @@ __version__ = '0.1.0'
 
 # The bot approvals the tasks run under, linked from every edit summary.
 BRFA = 'Wikipedia:Bots/Requests for approval/ZackBot 10'          # infoboxsweep: approved
-# A placeholder until imagesweep's request is filed (or pass --brfa).
-PHOTO_BRFA = 'Wikipedia:Bots/Requests for approval/ZackBot 16'    # imagesweep
+PHOTO_BRFA = 'Wikipedia:Bots/Requests for approval/ZackBot 15'    # imagesweep
 
 # The maintenance categories whose whole trees of subcategories the tasks go
 # through.

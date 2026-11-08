@@ -71,7 +71,7 @@ def test_live_run(tmp_path):
     assert wiki.page('Talk:Statehouse').summaries == [
         'Removing photograph request ({{Image requested}}): [[Statehouse]] has a photograph, '
         '[[:File:Ohio Statehouse.jpg]] '
-        '([[Wikipedia:Bots/Requests for approval/ZackBot 16|ZackBot 16]])']
+        '([[Wikipedia:Bots/Requests for approval/ZackBot 15|ZackBot 15]])']
     # Reported on its own page, not the infobox task's.
     page = wiki.report_page
     assert page.title() == 'User:ExampleBot/ImageReport'

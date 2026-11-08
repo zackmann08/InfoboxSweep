@@ -263,7 +263,7 @@ it would leave every photograph request category. The edit summary names
 the photo:
 
 ```wikitext
-Removing photograph request ({{Photo requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests for approval/ZackBot 16|ZackBot 16]])
+Removing photograph request ({{Photo requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests for approval/ZackBot 15|ZackBot 15]])
 ```
 
 ### Its report page
@@ -374,9 +374,10 @@ Each task needs its own approval at
 `infoboxsweep` is approved as
 [ZackBot 10](https://en.wikipedia.org/wiki/Wikipedia:Bots/Requests_for_approval/ZackBot_10),
 which its edit summaries link, so it needs no `--trial`. `imagesweep`'s
-summaries link a placeholder, `ZackBot 16`: change `PHOTO_BRFA` in
-[`infoboxsweep/__init__.py`](infoboxsweep/__init__.py) to its request's real
-name once it's filed, or pass `--brfa`.
+summaries link
+[ZackBot 15](https://en.wikipedia.org/wiki/Wikipedia:Bots/Requests_for_approval/ZackBot_15)
+(`PHOTO_BRFA` in [`infoboxsweep/__init__.py`](infoboxsweep/__init__.py), or
+`--brfa`); until that's approved, run it with `--trial`.
 
 1. At [Special:BotPasswords](https://en.wikipedia.org/wiki/Special:BotPasswords),
    logged in as ZackBot, make a bot password named `infoboxsweep` with the
