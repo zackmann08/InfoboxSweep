@@ -1,6 +1,6 @@
 """The tasks' settings, and how they check a batch of articles."""
 
-from infoboxsweep.request import remove_requests
+from infoboxsweep.request import remove_requests, topics_of
 from infoboxsweep.tasks import INFOBOX, PHOTO, TASKS
 from tests.fakes import INFOBOX_ARTICLE, FakePage, FakeWiki
 
@@ -38,11 +38,40 @@ def test_check_photos():
     assert INFOBOX.check(wiki, [], []) == {} and PHOTO.check(wiki, [], []) == {}
 
 
-def remove(text):
-    return remove_requests(text, ['Image requested', 'Reqphoto'],
-                           ['Category:Wikipedia requested photographs'],
+# A tree with topic categories.
+TREE = ['Category:Wikipedia requested photographs',
+        'Category:Wikipedia requested images of musicians',
+        'Category:Wikipedia requested images of people of Washington',
+        'Category:Wikipedia requested photographs in Ohio']
+
+
+TOPICS = topics_of(TREE)
+
+
+def remove(text, topics=TOPICS):
+    return remove_requests(text, ['Image requested', 'Reqphoto', 'Photo requested'], TREE,
                            params=PHOTO.request_params, template_params=PHOTO.template_params,
-                           details=PHOTO.details)
+                           topics=topics, details=PHOTO.details)
+
+
+def test_topics_of():
+    assert topics_of(TREE) == {'musicians', 'people of washington', 'ohio'}
+    assert topics_of(['Category:Wikipedia_requested_images_of_Ships']) == {'ships'}
+
+
+def test_kurt_cobain():
+    # Talk:Kurt Cobain, as it was on 8 November 2026: the topics are fine,
+    # but the reason says the current photo won't do.
+    talk = ('{{Photo requested|musicians|people of Washington|reason=Current image and all '
+            'other alternatives are very blurry and low-quality.}}')
+    result = remove(talk)
+    assert not result.changed
+    assert result.specific == [
+        '{{Photo requested}} asks for something particular: reason=Current image and all '
+        'other alternatives are very blurry and low-quality.']
+    # Without the reason, only topics: taken off.
+    result = remove('{{Photo requested|musicians|People of Washington}}\nText')
+    assert result.text == 'Text' and result.specific == []
 
 
 def test_photo_requests_removed():
@@ -61,8 +90,11 @@ def test_photo_requests_removed():
 
 def test_particular_requests_are_left_for_a_human():
     for text, particular in [
+        # Not a topic of the tree: a description of what's wanted.
         ('{{Image requested|the interior}}',
          '{{Image requested}} asks for something particular: the interior'),
+        ('{{Image requested|musicians|the drummer}}',
+         '{{Image requested}} asks for something particular: the drummer'),
         ('{{Image requested|in=Ohio|of=the dam at night}}',
          '{{Image requested}} asks for something particular: of=the dam at night'),
         ('{{WikiProject Ohio|needs-photo=yes|photo-details=the interior}}',
@@ -72,3 +104,5 @@ def test_particular_requests_are_left_for_a_human():
         assert not result.changed and result.specific == [particular]
     # An empty details parameter asks for nothing in particular.
     assert remove('{{WikiProject Ohio|needs-photo=yes|photo-details=}}').changed
+    # Without a tree (with --page), unnamed values are taken as topics.
+    assert remove('{{Image requested|the interior}}', topics=None).changed

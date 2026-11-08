@@ -16,10 +16,18 @@ A talk page asks in one of three ways, and the bot takes out each it finds:
   with an infobox request]]``, or any category in its tree.
 
 A request that asks for something in particular, such as ``{{Image
-requested|interior}}``, or a banner with ``image-details=the interior``
-next to its ``needs-image=yes``, isn't met by just any infobox or
-photograph, so it's left alone, and noted in Removal.specific: the bot then
-leaves the page for a human.
+requested|reason=the current one is blurry}}``, or a banner with
+``image-details=the interior`` next to its ``needs-image=yes``, isn't met by
+just any infobox or photograph, so it's left alone, and noted in
+Removal.specific: the bot then leaves the page for a human.
+
+The request template's unnamed values are usually topics:
+``{{Photo requested|musicians|people of Washington}}`` puts the page in
+"Wikipedia requested images of musicians" and "... of people of
+Washington".  So an unnamed value asks for nothing in particular if it's
+one of the tree's topics (see topics_of): what comes after "of" or "in" in
+the name of one of its categories.  One that isn't, such as ``{{Image
+requested|the interior}}``, is taken as a description of what's wanted.
 
 The bot then checks the result with MediaWiki (see Bot._still_requested): if
 the page would still be in one of the tree's categories, it is left for a
@@ -42,9 +50,10 @@ from .wikitext import (
     normalize_param,
     normalize_template_name,
     normalize_title,
+    strip_comments,
 )
 
-__all__ = ['REQUEST_TEMPLATE', 'REQUEST_PARAMS', 'Removal', 'remove_requests']
+__all__ = ['REQUEST_TEMPLATE', 'REQUEST_PARAMS', 'Removal', 'remove_requests', 'topics_of']
 
 REQUEST_TEMPLATE = 'Infobox requested'
 
@@ -79,15 +88,18 @@ def remove_requests(text: str, request_templates: Iterable[str],
                     categories: Iterable[str] = (), *,
                     params: Collection[str] = REQUEST_PARAMS,
                     template_params: Collection[str] | None = None,
+                    topics: Collection[str] | None = None,
                     details: Iterable[str] = ()) -> Removal:
     """text without its requests.  request_templates are the names the
     request template goes by (it and its redirects), without the Template:
     prefix; categories are the tree's, with Category:; params are the
     banners' request parameters.
 
-    template_params, if given, are the request template's parameters that
-    don't make it ask for anything in particular (such as where the subject
-    is); a call with any other is left alone.  details are words that, in
+    template_params, if given, are the request template's named parameters
+    that don't make it ask for anything in particular (such as where the
+    subject is); a call with any other is left alone.  So is one with an
+    unnamed value that isn't one of topics (see topics_of), lower case;
+    with topics None, any unnamed value is taken as a topic.  details are words that, in
     the name of another parameter of a banner asking for one, with a value,
     make it ask for something in particular (image-details=the interior)."""
     names = {normalize_template_name(name) for name in request_templates}
@@ -99,7 +111,7 @@ def remove_requests(text: str, request_templates: Iterable[str],
         if isinstance(node, Template):
             name = normalize_template_name(node.name)
             if name in names:
-                extra = _particular(node, template_params)
+                extra = _particular(node, template_params, topics)
                 if extra:
                     specific.append(f'{{{{{name}}}}} asks for something particular: {extra}')
                     continue
@@ -116,14 +128,33 @@ def remove_requests(text: str, request_templates: Iterable[str],
     return Removal(text, new if removed else text, removed, specific)
 
 
-def _particular(template: Template, allowed: Collection[str] | None) -> str | None:
+def topics_of(categories: Iterable[str]) -> set[str]:
+    """The topics of request categories, lower case: what comes after the
+    first " of ", or " in ", in their names.  "Category:Wikipedia requested
+    images of people of Washington" gives "people of washington"."""
+    found = set()
+    for category in categories:
+        name = ' '.join(category.split(':', 1)[-1].replace('_', ' ').split()).lower()
+        for word in (' of ', ' in '):
+            if word in name:
+                found.add(name.split(word, 1)[1])
+    return found
+
+
+def _particular(template: Template, allowed: Collection[str] | None,
+                topics: Collection[str] | None) -> str | None:
     """The first parameter, shown, of a request template's call that makes
-    it ask for something in particular: one not in allowed, with a value."""
+    it ask for something in particular: a named one not in allowed, or an
+    unnamed one not in topics, with a value."""
     if allowed is None:
         return None
     for param in template.params:
         if is_blank(param.value):
             continue
+        if not param.showkey:
+            value = ' '.join(strip_comments(param.value).split()).lower()
+            if topics is None or value in topics:
+                continue
         if not param.showkey or normalize_param(param.name) not in allowed:
             shown = str(param.value).strip() if not param.showkey else (
                 f'{str(param.name).strip()}={str(param.value).strip()}')

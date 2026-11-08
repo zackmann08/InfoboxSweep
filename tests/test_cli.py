@@ -197,9 +197,8 @@ def test_imagesweep_check(photo_wiki, capsys):
     assert cli.images_main(['check', 'Logo PNG']) == 0
     assert 'Logo PNG: for a human: the lead image' in capsys.readouterr().out
     assert cli.images_main(['check', 'Interior']) == 0
-    assert ('Talk:Interior: for a human: {{Image requested}} asks for something particular: '
-            'the dome inside\nTalk:Interior: no photograph request found\n'
-            ) in capsys.readouterr().out
+    # With no tree to tell topics from descriptions, unnamed values are topics.
+    assert 'Talk:Interior: {{Image requested}}\n' in capsys.readouterr().out
     assert cli.images_main(['check', 'Pending']) == 0
     assert capsys.readouterr().out.startswith('Pending: no photograph (no lead image)\n')
 

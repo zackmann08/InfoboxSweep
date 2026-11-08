@@ -88,3 +88,43 @@ def test_still_in_a_photo_category(tmp_path):
     _, report = run(wiki, tmp_path, pages=('Statehouse',))
     [(_, _, why)] = report.reviews
     assert why.startswith('the article has a photograph, but after removing')
+
+
+MUSICIANS = 'Category:Wikipedia requested images of musicians'
+WASHINGTON = 'Category:Wikipedia requested images of people of Washington'
+
+
+def cobain_wiki(talk):
+    """Kurt Cobain as he was on 8 November 2026: the lead image a free JPEG,
+    260×346, of him at the 1992 MTV Video Music Awards."""
+    wiki = FakeWiki()
+    wiki.photo_redirects.append('Photo requested')
+    wiki.tree(PHOTO_CATEGORY, subcats=[MUSICIANS, WASHINGTON])
+    wiki.add(FakePage('Kurt Cobain', "'''Kurt Donald Cobain''' was an American musician."),
+             FakePage('Talk:Kurt Cobain', talk))
+    wiki.photo('Kurt Cobain', 'File:Nirvana around 1992 (cropped).jpg', size=(260, 346))
+    wiki.tree(MUSICIANS, pages=['Talk:Kurt Cobain'])
+    wiki.tree(WASHINGTON, pages=['Talk:Kurt Cobain'])
+    return wiki
+
+
+def test_kurt_cobain_asks_for_a_better_photo(tmp_path):
+    talk = ('{{Talk header}}\n{{Photo requested|musicians|people of Washington|reason=Current '
+            'image and all other alternatives are very blurry and low-quality.}}\n')
+    _, report = run(cobain_wiki(talk), tmp_path)
+    assert report.found == 1 and report.duplicates == 1 and report.fulfilled == 1
+    assert report.edits == []
+    [(title, article, why)] = report.reviews
+    assert (title, article) == ('Talk:Kurt Cobain', 'Kurt Cobain')
+    assert why == (
+        'the article has a photograph (lead image [[:File:Nirvana around 1992 (cropped).jpg]] '
+        '(JPEG, 260×346)), but {{Photo requested}} asks for something particular: '
+        'reason=Current image and all other alternatives are very blurry and low-quality.')
+
+
+def test_kurt_cobain_without_a_reason(tmp_path):
+    _, report = run(cobain_wiki('{{Talk header}}\n{{Photo requested|musicians|people of '
+                                'Washington}}\n'), tmp_path)
+    [edit] = report.edits
+    assert edit.removed == ['{{Photo requested}}'] and report.reviews == []
+    assert '+{{Talk header}}' not in edit.diff and '-{{Photo requested|' in edit.diff

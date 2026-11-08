@@ -219,13 +219,30 @@ changed and not listed.
 
 ### Requests for something particular
 
-Some requests aren't for just any photo: `{{Image requested|the interior}}`,
-or a banner with `|photo-details=the dome at night` next to its
-`|needs-photo=yes`. A lead photo doesn't meet those, so the bot leaves them
-alone and lists the page for manual review. On {{Image requested}}, only
-`in=`, `in2=` … `in10=` (where the subject is, for the location
-subcategories), `date=`, `small=` and `nocat=` count as asking for nothing in
-particular.
+Some requests aren't for just any photo. Kurt Cobain's talk page has
+`{{Photo requested|musicians|people of Washington|reason=Current image and all
+other alternatives are very blurry and low-quality.}}`: the article has a
+photo, and the request is for a better one. A lead photo doesn't meet such
+requests, so the bot leaves them alone and lists the page for manual review,
+saying what was asked for.
+
+On {{Image requested}} and its redirects, such as {{Photo requested}}:
+
+- **Unnamed values are topics** when they match one of the tree's topic
+  categories: `musicians` and `people of Washington` put the page in
+  "Wikipedia requested images of musicians" and "… of people of
+  Washington". The bot takes the topics from the tree it walked: what comes
+  after "of" or "in" in each category's name. An unnamed value that matches
+  none, such as `{{Image requested|the interior}}`, is read as a description
+  of what's wanted, so the page goes to review. (With `--page` there's no
+  tree, so unnamed values are all taken as topics; the MediaWiki check
+  before saving still applies.)
+- **Named values** other than `in=`, `in2=` … `in10=` (where the subject is),
+  `date=`, `small=` and `nocat=` ask for something particular: `reason=`,
+  `of=` and the like send the page to review.
+
+On a banner, a parameter such as `|photo-details=the dome at night` next to
+`|needs-photo=yes` does the same.
 
 ### What it takes off the talk page
 

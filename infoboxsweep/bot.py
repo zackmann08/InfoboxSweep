@@ -29,7 +29,7 @@ from typing import Any
 
 from .infobox import Verdict
 from .report import Edit, Report, unified_diff
-from .request import Removal, remove_requests
+from .request import Removal, remove_requests, topics_of
 from .tasks import INFOBOX, Task
 from .tree import Tree, walk
 from .wiki import BATCH, Wiki, WikiPage
@@ -110,6 +110,7 @@ class Bot:
         self.report = Report(options.live, now(), root=self.category, thing=self.task.thing)
         self.request_names: list[str] = [self.task.request_template]
         self.tree_categories: set[str] = set()
+        self._topic_cache: set[str] | None = None
         self.run_page: str | None = None
         self.started_live = False   # logged in, and the Run page said yes
         self.next_progress: datetime | None = None
@@ -348,7 +349,8 @@ class Bot:
         task = self.task
         removal = remove_requests(talk.text, self.request_names, self.tree_categories,
                                   params=task.request_params,
-                                  template_params=task.template_params, details=task.details)
+                                  template_params=task.template_params,
+                                  topics=self._topics(), details=task.details)
         if removal.specific:
             self.report.review(title, name, f'the article has {task.thing} ({found.evidence}), '
                                'but ' + '; '.join(removal.specific))
@@ -360,6 +362,16 @@ class Bot:
             return
         else:
             self._edit(talk, name, removal, found)
+
+    def _topics(self) -> set[str] | None:
+        """The tree's topics, for telling a topic from a description in the
+        request template's unnamed values; None, to take them all as topics,
+        when the tree wasn't walked (with --page)."""
+        if not self.tree_categories:
+            return None
+        if self._topic_cache is None:
+            self._topic_cache = topics_of(self.tree_categories)
+        return self._topic_cache
 
     def _request_categories(self, title: str, text: str) -> list[str]:
         """The request categories the page title would be in with text, as
