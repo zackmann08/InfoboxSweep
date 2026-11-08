@@ -410,7 +410,7 @@ class Bot:
         title = talk.title()
         summary = edit_summary(article, removal.removed, self.options.summary_suffix,
                                brfa=self.brfa, trial=self.options.trial, task=self.task,
-                               shown=found.shown)
+                               shown=found.shown, account=self.report.account or 'ZackBot')
         edit = Edit(title, article, removal.removed, summary,
                     unified_diff(title, removal.original, removal.text), found.evidence)
         if self.options.live:
@@ -586,15 +586,25 @@ def _approval(brfa: str) -> str:
     return f' ([[{brfa}|{brfa.rsplit("/", 1)[-1]}]])' if brfa else ''
 
 
+def _summary_links(brfa: str, account: str) -> str:
+    """The end of every edit summary: " ([[Wikipedia:Bots/Requests_for_
+    approval/ZackBot_10|ZackBot 10]] - [[User talk:ZackBot|report false
+    positive]])", without the approval if there's none."""
+    links = [f'[[{brfa.replace(" ", "_")}|{brfa.rsplit("/", 1)[-1]}]]'] if brfa else []
+    links.append(f'[[User talk:{account}|report false positive]]')
+    return ' (' + ' - '.join(links) + ')'
+
+
 def edit_summary(article: str, removed: Iterable[str], suffix: str = '', *,
                  brfa: str | None = None, trial: bool = False, task: Task = INFOBOX,
-                 shown: str = '') -> str:
+                 shown: str = '', account: str = 'ZackBot') -> str:
     """The edit summary: "Removing infobox request ({{Infobox requested}}):
-    [[Foo]] has an infobox (ZackBot 10)", with what was removed, cut short
-    if there's too much, and what the article has, if shown."""
+    [[Foo]] has an infobox (ZackBot 10 - report false positive)", with what
+    was removed, cut short if there's too much, and what the article has, if
+    shown.  The false positives go to the account's talk page."""
     brfa = task.brfa if brfa is None else brfa
     head = 'BRFA trial: ' if trial else ''
-    tail = f'{_approval(brfa)}' + (f' {suffix}' if suffix else '')
+    tail = _summary_links(brfa, account) + (f' {suffix}' if suffix else '')
     body = f': [[{article}]] has {task.thing}' + (f', {shown}' if shown else '')
     action = f'Removing {task.request}'
     listed = '; '.join(removed)

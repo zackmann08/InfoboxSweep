@@ -176,7 +176,8 @@ def test_live_run(tmp_path):
                           '== Plot ==\nNeeds work.']
     assert talk.summaries == [
         'Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] '
-        'has an infobox ([[Wikipedia:Bots/Requests for approval/ZackBot 10|ZackBot 10]])']
+        'has an infobox ([[Wikipedia:Bots/Requests_for_approval/ZackBot_10|ZackBot 10]] - '
+        '[[User talk:ExampleBot|report false positive]])']
     assert report.edits[0].saved
     # The report page: when the run started, after the walk, and at the end.
     page = wiki.report_page
@@ -455,10 +456,16 @@ def test_categories_not_followed_and_a_tree_too_big(tmp_path, monkeypatch):
 # -- small parts ---------------------------------------------------------------
 
 def test_edit_summary():
+    assert edit_summary('Foo', ['{{Infobox requested}}']) == (
+        'Removing infobox request ({{Infobox requested}}): [[Foo]] has an infobox '
+        '([[Wikipedia:Bots/Requests_for_approval/ZackBot_10|ZackBot 10]] - '
+        '[[User talk:ZackBot|report false positive]])')
     assert edit_summary('Foo', ['{{Infobox requested}}'], brfa='') == (
-        'Removing infobox request ({{Infobox requested}}): [[Foo]] has an infobox')
-    assert edit_summary('Foo', ['x'], 'thanks', brfa='', trial=True) == (
-        'BRFA trial: Removing infobox request (x): [[Foo]] has an infobox thanks')
+        'Removing infobox request ({{Infobox requested}}): [[Foo]] has an infobox '
+        '([[User talk:ZackBot|report false positive]])')
+    assert edit_summary('Foo', ['x'], 'thanks', brfa='', trial=True, account='OtherBot') == (
+        'BRFA trial: Removing infobox request (x): [[Foo]] has an infobox '
+        '([[User talk:OtherBot|report false positive]]) thanks')
     long = edit_summary('Foo', [f'needs-infobox=yes from {{{{WikiProject {i}}}}}'
                                 for i in range(40)])
     assert len(long) <= 400 and '; …)' in long

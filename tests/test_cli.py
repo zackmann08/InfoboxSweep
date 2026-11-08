@@ -62,7 +62,7 @@ def test_live_run(wiki, capsys, tmp_path):
     assert 'Changed 1' in capsys.readouterr().out
     assert wiki.page('Talk:Example').summaries == [
         'Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] '
-        'has an infobox']
+        'has an infobox ([[User talk:ExampleBot|report false positive]])']
 
 
 def test_live_needs_a_user_config(wiki, capsys):

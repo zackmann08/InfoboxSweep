@@ -148,8 +148,11 @@ page alone and lists it for manual review. Dry runs do this check too.
 Edit summaries say what was removed and why, and link the bot's approval:
 
 ```wikitext
-Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] has an infobox ([[Wikipedia:Bots/Requests for approval/ZackBot 10|ZackBot 10]])
+Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] has an infobox ([[Wikipedia:Bots/Requests_for_approval/ZackBot_10|ZackBot 10]] - [[User talk:ZackBot|report false positive]])
 ```
+
+Every summary ends with a link to the task's approval and one for reporting
+a false positive, which goes to the bot account's talk page.
 
 ### Pages for manual review
 
@@ -285,7 +288,7 @@ it would leave every photograph request category. The edit summary names
 the photo:
 
 ```wikitext
-Removing photograph request ({{Photo requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests for approval/ZackBot 15|ZackBot 15]])
+Removing photograph request ({{Photo requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests_for_approval/ZackBot_15|ZackBot 15]] - [[User talk:ZackBot|report false positive]])
 ```
 
 ### Its report page
