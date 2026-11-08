@@ -94,10 +94,17 @@ class Wiki:
         return revision.timestamp, revision.user or None
 
     def redirects_to(self, title: str) -> list[str]:
-        """The names, without the Template: prefix, of the templates that
-        redirect to the template called title."""
+        """The other names, without the Template: prefix, of the template
+        called title: the templates that redirect to it.  If title is itself
+        a redirect, the template it redirects to, and those that redirect to
+        that."""
         page = pywikibot.Page(self.site, title, ns=TEMPLATE_NS)
-        return [p.title(with_ns=False) for p in page.redirects(namespaces=[TEMPLATE_NS])]
+        names = []
+        if page.exists() and page.isRedirectPage():
+            page = page.getRedirectTarget()
+            names.append(page.title(with_ns=False))
+        names += [p.title(with_ns=False) for p in page.redirects(namespaces=[TEMPLATE_NS])]
+        return [name for name in dict.fromkeys(names) if name != title]
 
     # -- categories --------------------------------------------------------
 

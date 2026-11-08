@@ -32,7 +32,7 @@ Checker = Callable[[Wiki, list[WikiPage], list[str]], dict[str, Verdict]]
 class Task:
     name: str                       # the command's name, such as infoboxsweep
     root: str                       # the category whose tree the run goes through
-    request_template: str           # without Template:
+    request_templates: tuple[str, ...]   # without Template:; their redirects too
     request_params: Collection[str]   # banners' parameters asking for it, as normalize_param
     keywords: tuple[str, ...]       # one is in the name of every category in the tree
     thing: str                      # what's asked for: "an infobox"
@@ -56,6 +56,16 @@ class Task:
         the bot hasn't walked the tree (with --page)."""
         name = category.lower()
         return self.follows(category) and any(w in name for w in ('request', 'need'))
+
+    def request_names(self, wiki: Wiki) -> list[str]:
+        """Every name the request templates go by: each, and each of the
+        templates that redirect to it, read from the wiki."""
+        names: list[str] = []
+        for template in self.request_templates:
+            for name in [template] + sorted(wiki.redirects_to(template)):
+                if name not in names:
+                    names.append(name)
+        return names
 
     def keyword_text(self) -> str:
         return ' or '.join(f'"{word}"' for word in self.keywords)
@@ -89,7 +99,7 @@ def check_photos(wiki: Wiki, articles: list[WikiPage],
 INFOBOX = Task(
     name='infoboxsweep',
     root=ROOT_CATEGORY,
-    request_template=REQUEST_TEMPLATE,
+    request_templates=(REQUEST_TEMPLATE,),
     request_params=REQUEST_PARAMS,
     keywords=('infobox',),
     thing='an infobox',
@@ -104,7 +114,9 @@ INFOBOX = Task(
 PHOTO = Task(
     name='imagesweep',
     root=PHOTO_CATEGORY,
-    request_template='Image requested',
+    # {{Photo requested}} (with {{Reqphoto}}, {{Needs photo}} and its other
+    # redirects) is the usual one; {{Image requested}} is a separate template.
+    request_templates=('Photo requested', 'Image requested'),
     # WikiProject banners' names for "this article needs a photograph".
     request_params=frozenset({
         'needs-photo', 'needsphoto', 'need-photo', 'needs-photograph', 'needs-photos',
@@ -121,9 +133,14 @@ PHOTO = Task(
     report='ImageReport',
     brfa=PHOTO_BRFA,
     check=check_photos,
-    # {{Image requested|in=Ohio}} only says where the subject is.
-    template_params=frozenset({f'in{n}' for n in ('', *map(str, range(1, 11)))}
-                              | {'date', 'small', 'nocat'}),
+    # The request template's named parameters that ask for nothing in
+    # particular: where the subject is ({{Photo requested|in=Ohio}}, in1= ...
+    # in21=), topic categories (1o=, 1r= ...), that the photo must be free
+    # (a free lead photo is), and how the box is shown.  Others, such as
+    # reason= and of=, say what's wanted.
+    template_params=frozenset({f'in{n}' for n in ('', *map(str, range(1, 22)))}
+                              | {f'{n}{kind}' for n in range(1, 4) for kind in 'or'}
+                              | {'free', 'date', 'small', 'collapsed', 'nocat', 'category'}),
     details=('photo', 'image', 'picture'),
 )
 

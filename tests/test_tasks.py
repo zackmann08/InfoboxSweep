@@ -54,6 +54,26 @@ def remove(text, topics=TOPICS):
                            topics=topics, details=PHOTO.details)
 
 
+def test_request_names():
+    # As on the English Wikipedia: {{Photo requested}} and its redirects,
+    # and {{Image requested}}, a separate template.
+    wiki = FakeWiki()
+    wiki.photo_redirects = ['Reqphoto', 'Needs photo', 'Photo request']
+    assert PHOTO.request_names(wiki) == ['Photo requested', 'Needs photo', 'Photo request',
+                                         'Reqphoto', 'Image requested']
+    assert INFOBOX.request_names(wiki) == ['Infobox requested', 'Infobox request']
+
+
+def test_the_templates_harmless_parameters():
+    for text in ['{{Photo requested|musicians|in15=Ohio|free=yes|collapsed=yes}}',
+                 '{{Photo requested|1o=aviation|1r=Aviation|small=yes}}']:
+        assert remove(text).changed and remove(text).specific == [], text
+    for text, shown in [('{{Photo requested|of=the 1932 building}}', 'of=the 1932 building'),
+                        ('{{Photo requested|reason=blurry}}', 'reason=blurry')]:
+        assert remove(text).specific == [
+            f'{{{{Photo requested}}}} asks for something particular: {shown}']
+
+
 def test_topics_of():
     assert topics_of(TREE) == {'musicians', 'people of washington', 'ohio'}
     assert topics_of(['Category:Wikipedia_requested_images_of_Ships']) == {'ships'}

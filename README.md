@@ -226,20 +226,26 @@ photo, and the request is for a better one. A lead photo doesn't meet such
 requests, so the bot leaves them alone and lists the page for manual review,
 saying what was asked for.
 
-On {{Image requested}} and its redirects, such as {{Photo requested}}:
+The request templates are {{Photo requested}}, the usual one, with all its
+redirects ({{Reqphoto}}, {{Needs photo}}, {{Photo request}} and the rest,
+read from the wiki), and {{Image requested}}, a separate template. On
+these:
 
 - **Unnamed values are topics** when they match one of the tree's topic
   categories: `musicians` and `people of Washington` put the page in
   "Wikipedia requested images of musicians" and "… of people of
   Washington". The bot takes the topics from the tree it walked: what comes
   after "of" or "in" in each category's name. An unnamed value that matches
-  none, such as `{{Image requested|the interior}}`, is read as a description
+  none, such as `{{Photo requested|the interior}}`, is read as a description
   of what's wanted, so the page goes to review. (With `--page` there's no
   tree, so unnamed values are all taken as topics; the MediaWiki check
   before saving still applies.)
-- **Named values** other than `in=`, `in2=` … `in10=` (where the subject is),
-  `date=`, `small=` and `nocat=` ask for something particular: `reason=`,
-  `of=` and the like send the page to review.
+- **Named values** ask for nothing in particular if they are where the
+  subject is (`in=`, `in1=` … `in21=`), topic categories (`1o=`, `1r=` …
+  `3r=`), that the photo must be free (`free=`: a free lead photo is), or how
+  the box is shown (`small=`, `collapsed=`, `date=`, `nocat=`,
+  `category=`). Any other, such as `reason=` or `of=` (`of=the 1932
+  building`), says what's wanted, and sends the page to review.
 
 On a banner, a parameter such as `|photo-details=the dome at night` next to
 `|needs-photo=yes` does the same.
@@ -249,14 +255,15 @@ On a banner, a parameter such as `|photo-details=the dome at night` next to
 The same three kinds of request as for infoboxes: a banner parameter saying
 yes (`needs-photo`, `needs-image`, `image-needed`, `imageneeded`,
 `photo-needed`, `reqphoto`, … see `PHOTO` in
-[`infoboxsweep/tasks.py`](infoboxsweep/tasks.py)); {{Image requested}} or
-any of its redirects, such as {{Reqphoto}}; or the category added by hand.
+[`infoboxsweep/tasks.py`](infoboxsweep/tasks.py)); {{Photo requested}} or
+any of its redirects, such as {{Reqphoto}}, or {{Image requested}}; or the
+category added by hand.
 Then MediaWiki parses the talk page as it would be, and the bot saves only if
 it would leave every photograph request category. The edit summary names
 the photo:
 
 ```wikitext
-Removing photograph request ({{Image requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests for approval/ZackBot 16|ZackBot 16]])
+Removing photograph request ({{Photo requested}}): [[Ohio Statehouse]] has a photograph, [[:File:Ohio Statehouse.jpg]] ([[Wikipedia:Bots/Requests for approval/ZackBot 16|ZackBot 16]])
 ```
 
 ### Its report page

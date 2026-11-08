@@ -9,13 +9,13 @@ A talk page asks in one of three ways, and the bot takes out each it finds:
   any value Module:Yesno reads as yes asks for one.  The parameter is
   removed, with the rest of the banner left as it was.  A parameter that
   doesn't say yes asks for nothing, and is left alone.
-- **The request template**, such as {{Infobox requested}} or {{Image
+- **The request template**, such as {{Infobox requested}} or {{Photo
   requested}}, or one of its redirects, on its own.  The call is removed,
   and its line too if nothing else was on it.
 - **The category itself**, added by hand: ``[[Category:Wikipedia articles
   with an infobox request]]``, or any category in its tree.
 
-A request that asks for something in particular, such as ``{{Image
+A request that asks for something in particular, such as ``{{Photo
 requested|reason=the current one is blurry}}``, or a banner with
 ``image-details=the interior`` next to its ``needs-image=yes``, isn't met by
 just any infobox or photograph, so it's left alone, and noted in
@@ -26,7 +26,7 @@ The request template's unnamed values are usually topics:
 "Wikipedia requested images of musicians" and "... of people of
 Washington".  So an unnamed value asks for nothing in particular if it's
 one of the tree's topics (see topics_of): what comes after "of" or "in" in
-the name of one of its categories.  One that isn't, such as ``{{Image
+the name of one of its categories.  One that isn't, such as ``{{Photo
 requested|the interior}}``, is taken as a description of what's wanted.
 
 The bot then checks the result with MediaWiki (see Bot._still_requested): if

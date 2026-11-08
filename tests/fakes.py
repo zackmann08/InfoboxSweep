@@ -192,8 +192,10 @@ class FakeWiki:
         return page.latest_revision.timestamp, page.latest_revision.user
 
     def redirects_to(self, title):
-        if title == 'Image requested':
+        if title == 'Photo requested':
             return list(self.photo_redirects)
+        if title == 'Image requested':
+            return []
         return list(self.request_redirects)
 
     def lead_images(self, titles):
@@ -232,7 +234,7 @@ class FakeWiki:
             name = normalize_template_name(template.name)
             if name in ('Infobox requested', *self.request_redirects):
                 found.add(ROOT_CATEGORY)
-            if name in ('Image requested', *self.photo_redirects):
+            if name in ('Image requested', 'Photo requested', *self.photo_redirects):
                 where = template.get('in').value.strip() if template.has('in') else ''
                 found.add(f'{PHOTO_CATEGORY} in {where}' if where else PHOTO_CATEGORY)
             for param in template.params:

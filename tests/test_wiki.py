@@ -26,6 +26,12 @@ class StubPage:
     def exists(self):
         return self._title in self.site.texts
 
+    def isRedirectPage(self):
+        return self._title in self.site.redirect_targets
+
+    def getRedirectTarget(self):
+        return StubPage(self.site, self.site.redirect_targets[self._title])
+
     def redirects(self, *, namespaces):
         self.site.calls.append(('redirects', self._title, namespaces))
         return [StubPage(self.site, t) for t, target in self.site.redirect_targets.items()
@@ -113,6 +119,15 @@ def test_redirects_to():
     site.redirect_targets = {'Template:Infobox request': 'Template:Infobox requested'}
     assert Wiki(site).redirects_to('Infobox requested') == ['Infobox request']
     assert site.calls == [('redirects', 'Template:Infobox requested', [10])]
+
+
+def test_redirects_to_a_redirect():
+    # Asked about a redirect: the template it redirects to, and its other
+    # redirects.
+    site = StubSite({'Template:Reqphoto': '#REDIRECT', 'Template:Photo requested': 'x'})
+    site.redirect_targets = {'Template:Reqphoto': 'Template:Photo requested',
+                             'Template:Needs photo': 'Template:Photo requested'}
+    assert Wiki(site).redirects_to('Reqphoto') == ['Photo requested', 'Needs photo']
 
 
 def test_category_members():

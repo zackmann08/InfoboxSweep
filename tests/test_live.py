@@ -75,3 +75,9 @@ def test_dry_run_of_the_photo_task(wiki, tmp_path):
     talk = next(iter(wiki.category_pages(wiki.subcategories(PHOTO.root)[0])))
     report = Bot(wiki, Options(task=PHOTO, pages=(talk,), out_dir=tmp_path)).run()
     assert report.checked == 1 and not report.errors and not report.stopped
+
+
+def test_the_photo_request_templates(wiki):
+    from infoboxsweep.tasks import PHOTO
+    names = PHOTO.request_names(wiki)
+    assert {'Photo requested', 'Reqphoto', 'Image requested'} <= set(names)

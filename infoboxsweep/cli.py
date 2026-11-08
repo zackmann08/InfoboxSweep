@@ -196,7 +196,7 @@ def _check(args: argparse.Namespace, wiki: Any, task: Task) -> int:
     if not article.exists() or article.isRedirectPage():
         print(f'{name}: ' + ('a redirect' if article.exists() else 'does not exist'))
         return 1
-    names = [task.request_template] + wiki.redirects_to(task.request_template)
+    names = task.request_names(wiki)
     found = task.check(wiki, [article], names)[name]
     print(f'{name}: ' + (f'has {task.thing} ({found.evidence})' if found.found else
                          f'for a human: {found.review}' if found.review else

@@ -97,8 +97,7 @@ WASHINGTON = 'Category:Wikipedia requested images of people of Washington'
 def cobain_wiki(talk):
     """Kurt Cobain as he was on 8 November 2026: the lead image a free JPEG,
     260×346, of him at the 1992 MTV Video Music Awards."""
-    wiki = FakeWiki()
-    wiki.photo_redirects.append('Photo requested')
+    wiki = FakeWiki()   # {{Photo requested}} is a template, {{Reqphoto}} its redirect
     wiki.tree(PHOTO_CATEGORY, subcats=[MUSICIANS, WASHINGTON])
     wiki.add(FakePage('Kurt Cobain', "'''Kurt Donald Cobain''' was an American musician."),
              FakePage('Talk:Kurt Cobain', talk))

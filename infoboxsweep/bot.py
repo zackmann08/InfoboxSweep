@@ -108,7 +108,7 @@ class Bot:
         self.brfa = self.task.brfa if options.brfa is None else options.brfa
         self.now = now
         self.report = Report(options.live, now(), root=self.category, thing=self.task.thing)
-        self.request_names: list[str] = [self.task.request_template]
+        self.request_names: list[str] = list(self.task.request_templates)
         self.tree_categories: set[str] = set()
         self._topic_cache: set[str] | None = None
         self.run_page: str | None = None
@@ -173,8 +173,7 @@ class Bot:
     def _run(self) -> None:
         if self.options.live:
             self._preflight()
-        template = self.task.request_template
-        self.request_names = [template] + sorted(self.wiki.redirects_to(template))
+        self.request_names = self.task.request_names(self.wiki)
         titles = self._titles()
         done = 0
         for start in range(0, len(titles), BATCH):
