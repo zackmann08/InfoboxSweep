@@ -157,12 +157,28 @@ Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Exampl
 Every summary ends with a link to the task's approval and one for reporting
 a false positive, which goes to the bot account's talk page.
 
+### Articles that are redirects
+
+If the article is a redirect, as with Talk:Felubakshi, there's no article to
+have an infobox or a photograph, so the bot takes the request off the talk
+page without checking anything else. That goes for both tasks, and for any
+request, even one asking for something particular. The usual checks still
+apply: the bot must find the request, `{{bots}}`/`{{nobots}}` is respected,
+and MediaWiki must say the talk page leaves the request categories. The
+edit summary says where the article redirects:
+
+```wikitext
+Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Felubakshi]] is a redirect to [[Phulbari]] ([[Wikipedia:Bots/Requests_for_approval/ZackBot_10|ZackBot 10]] - [[User talk:ZackBot|report false positive]])
+```
+
+The local report counts these separately ("article is a redirect").
+
 ### Pages for manual review
 
 The bot never guesses. These are listed for a human, on the report page and
 in the local report:
 
-- the article doesn't exist, or is a redirect;
+- the article doesn't exist;
 - the article calls a template named `Infobox …` but doesn't transclude
   Template:Infobox or Module:Infobox (the template may be broken or missing);
 - the article has an infobox, but the bot couldn't find the request on the

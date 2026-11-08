@@ -128,3 +128,16 @@ def test_kurt_cobain_without_a_reason(tmp_path):
     [edit] = report.edits
     assert edit.removed == ['{{Photo requested}}'] and report.reviews == []
     assert '+{{Talk header}}' not in edit.diff and '-{{Photo requested|' in edit.diff
+
+
+def test_the_article_is_a_redirect(tmp_path):
+    # Even a request for something particular comes off: there's no article.
+    wiki = FakeWiki()
+    wiki.add(FakePage('Felubakshi', '#REDIRECT [[Phulbari]]', redirect_to='Phulbari'),
+             FakePage('Talk:Felubakshi', '{{Talk header}}\n{{Photo requested|reason=blurry}}\n'))
+    wiki.tree(PHOTO_CATEGORY, pages=['Talk:Felubakshi'])
+    _, report = run(wiki, tmp_path)
+    [edit] = report.edits
+    assert edit.removed == ['{{Photo requested}}'] and report.reviews == []
+    assert edit.summary.startswith('Removing photograph request ({{Photo requested}}): '
+                                   '[[Felubakshi]] is a redirect to [[Phulbari]] (')

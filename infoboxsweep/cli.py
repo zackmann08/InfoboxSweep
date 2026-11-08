@@ -193,20 +193,26 @@ def _check(args: argparse.Namespace, wiki: Any, task: Task) -> int:
     talk = page if page.isTalkPage() else page.toggleTalkPage()
     article = talk.toggleTalkPage()
     name = article.title()
-    if not article.exists() or article.isRedirectPage():
-        print(f'{name}: ' + ('a redirect' if article.exists() else 'does not exist'))
+    if not article.exists():
+        print(f'{name}: does not exist')
         return 1
     names = task.request_names(wiki)
-    found = task.check(wiki, [article], names)[name]
-    print(f'{name}: ' + (f'has {task.thing} ({found.evidence})' if found.found else
-                         f'for a human: {found.review}' if found.review else
-                         f'no {task.thing.split()[-1]}'
-                         + (f' ({found.evidence})' if found.evidence else '')))
+    redirect = article.isRedirectPage()
+    if redirect:
+        # The request comes off, whatever it asks for: see Bot._redirected.
+        print(f'{name}: a redirect, so any {task.request} on its talk page comes off')
+    else:
+        found = task.check(wiki, [article], names)[name]
+        print(f'{name}: ' + (f'has {task.thing} ({found.evidence})' if found.found else
+                             f'for a human: {found.review}' if found.review else
+                             f'no {task.thing.split()[-1]}'
+                             + (f' ({found.evidence})' if found.evidence else '')))
     if not talk.exists():
         print(f'{talk.title()}: does not exist')
         return 0
     removal = remove_requests(talk.text, names, params=task.request_params,
-                              template_params=task.template_params, details=task.details)
+                              template_params=None if redirect else task.template_params,
+                              details=() if redirect else task.details)
     for particular in removal.specific:
         print(f'{talk.title()}: request found, but left for a human: {particular}')
     if removal.removed or not removal.specific:

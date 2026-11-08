@@ -123,8 +123,9 @@ def test_check_other_cases(wiki, capsys):
     assert capsys.readouterr().out == 'Lonely: no infobox\nTalk:Lonely: does not exist\n'
     assert cli.main(['check', 'Quiet']) == 0
     assert capsys.readouterr().out == 'Quiet: no infobox\nTalk:Quiet: no infobox request found\n'
-    assert cli.main(['check', 'Moved']) == 1
-    assert capsys.readouterr().out == 'Moved: a redirect\n'
+    assert cli.main(['check', 'Moved']) == 0
+    assert capsys.readouterr().out == ('Moved: a redirect, so any infobox request on its talk '
+                                       'page comes off\nTalk:Moved: does not exist\n')
     assert cli.main(['check', 'Talk:Nothing']) == 1
     assert capsys.readouterr().out == 'Nothing: does not exist\n'
 
@@ -225,3 +226,13 @@ def test_imagesweep_help():
                           capture_output=True, text=True)
     assert done.returncode == 0 and done.stdout.startswith('usage: imagesweep')
     assert 'removing photograph requests' in done.stdout
+
+
+def test_check_a_redirect(photo_wiki, capsys):
+    photo_wiki.add(FakePage('Old name', '#REDIRECT [[Lake]]', redirect_to='Lake'),
+                   FakePage('Talk:Old name', '{{Photo requested|reason=blurry}}'))
+    assert cli.images_main(['check', 'Old name']) == 0
+    assert capsys.readouterr().out == (
+        'Old name: a redirect, so any photograph request on its talk page comes off\n'
+        'Talk:Old name: {{Photo requested}}\n'
+        'After removing it: in no photograph request category\n')

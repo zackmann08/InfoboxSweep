@@ -338,8 +338,7 @@ class Bot:
             self.report.review(title, name, 'the article does not exist')
             return
         if article.isRedirectPage():
-            self.report.review(title, name, 'the article is a redirect: should the talk page '
-                                            'be one too?')
+            self._redirected(talk, article)
             return
         assert found is not None
         if found.review:
@@ -358,14 +357,39 @@ class Bot:
         if removal.specific:
             self.report.review(title, name, f'the article has {task.thing} ({found.evidence}), '
                                'but ' + '; '.join(removal.specific))
-        elif not removal.changed:
-            self._request_not_found(talk, name)
+            return
+        self._take_off(talk, name, removal, found, f'has {task.thing}')
+
+    def _redirected(self, talk: WikiPage, article: WikiPage) -> None:
+        """The article is a redirect: there's no article to have an infobox
+        or a photograph, so the request comes off, whatever it asks for."""
+        name = article.title()
+        try:
+            target = article.getRedirectTarget()
+            to = f' to [[{target.title()}]]' if target is not None else ''
+        except Exception as error:   # noqa: BLE001 - the summary can do without it
+            log.warning('Could not tell where %s redirects: %s', name, error)
+            to = ''
+        self.report.redirects += 1
+        removal = remove_requests(talk.text, self.request_names, self.tree_categories,
+                                  params=self.task.request_params)
+        found = Verdict(True, f'the article is a redirect{to}')
+        self._take_off(talk, name, removal, found, f'is a redirect{to}')
+
+    def _take_off(self, talk: WikiPage, name: str, removal: Removal, found: Verdict,
+                  has: str) -> None:
+        """Take the request off the talk page, if the bot found it, may edit
+        the page, and MediaWiki says that takes the page out of the request
+        categories.  has says why: "has an infobox", "is a redirect"."""
+        title = talk.title()
+        if not removal.changed:
+            self._request_not_found(talk, name, has)
         elif not talk.botMayEdit():
             self.report.skip(title, 'excludes the bot with {{bots}} or {{nobots}}')
-        elif self._still_requested(title, name, removal):
+        elif self._still_requested(title, name, removal, has):
             return
         else:
-            self._edit(talk, name, removal, found)
+            self._edit(talk, name, removal, found, has)
 
     def _topics(self) -> set[str] | None:
         """The tree's topics, for telling a topic from a description in the
@@ -383,7 +407,7 @@ class Bot:
         return sorted(c for c in self.wiki.categories_with(title, text)
                       if c in self.tree_categories or self.task.is_request_category(c))
 
-    def _request_not_found(self, talk: WikiPage, article: str) -> None:
+    def _request_not_found(self, talk: WikiPage, article: str, has: str) -> None:
         """The bot can't see a request on the talk page.  If MediaWiki says
         the page is in no request category now, it was fixed since the
         category was listed (MediaWiki updates category listings a little
@@ -395,27 +419,28 @@ class Bot:
             self.report.skip(title, f'no longer asks for {self.task.thing} (the category '
                                     'listing was out of date)')
             return
-        self.report.review(title, article, f'the article has {self.task.thing}, but the bot '
-                           'could not find the request on the talk page, which is in '
-                           + ', '.join(left))
+        self.report.review(title, article, f'the article {has}, but the bot could not find '
+                           'the request on the talk page, which is in ' + ', '.join(left))
 
-    def _still_requested(self, title: str, article: str, removal: Removal) -> bool:
+    def _still_requested(self, title: str, article: str, removal: Removal, has: str) -> bool:
         """Check with MediaWiki that the talk page would leave the request
         categories once the bot's change is saved; if it wouldn't, the
         request comes some other way, so leave it for a human."""
         left = self._request_categories(title, removal.text)
         if not left:
             return False
-        self.report.review(title, article, f'the article has {self.task.thing}, but after '
-                           'removing ' + ', '.join(removal.removed) + ' the talk page would '
-                           'still be in ' + ', '.join(left))
+        self.report.review(title, article, f'the article {has}, but after removing '
+                           + ', '.join(removal.removed) + ' the talk page would still be in '
+                           + ', '.join(left))
         return True
 
-    def _edit(self, talk: WikiPage, article: str, removal: Removal, found: Verdict) -> None:
+    def _edit(self, talk: WikiPage, article: str, removal: Removal, found: Verdict,
+              has: str) -> None:
         title = talk.title()
         summary = edit_summary(article, removal.removed, self.options.summary_suffix,
                                brfa=self.brfa, trial=self.options.trial, task=self.task,
-                               shown=found.shown, account=self.report.account or 'ZackBot')
+                               shown=found.shown, account=self.report.account or 'ZackBot',
+                               has=has)
         edit = Edit(title, article, removal.removed, summary,
                     unified_diff(title, removal.original, removal.text), found.evidence)
         if self.options.live:
@@ -600,15 +625,18 @@ def _summary_links(brfa: str, account: str) -> str:
 
 def edit_summary(article: str, removed: Iterable[str], suffix: str = '', *,
                  brfa: str | None = None, trial: bool = False, task: Task = INFOBOX,
-                 shown: str = '', account: str = 'ZackBot') -> str:
+                 shown: str = '', account: str = 'ZackBot', has: str | None = None) -> str:
     """The edit summary: "Removing infobox request ({{Infobox requested}}):
     [[Foo]] has an infobox (ZackBot 10 - report false positive)", with what
     was removed, cut short if there's too much, and what the article has, if
-    shown.  The false positives go to the account's talk page."""
+    shown.  The false positives go to the account's talk page.  has, if
+    given, says why instead of "has an infobox", as in "is a redirect to
+    [[Bar]]"."""
     brfa = task.brfa if brfa is None else brfa
     head = 'BRFA trial: ' if trial else ''
     tail = _summary_links(brfa, account) + (f' {suffix}' if suffix else '')
-    body = f': [[{article}]] has {task.thing}' + (f', {shown}' if shown else '')
+    has = f'has {task.thing}' if has is None else has
+    body = f': [[{article}]] {has}' + (f', {shown}' if shown else '')
     action = f'Removing {task.request}'
     listed = '; '.join(removed)
     room = SUMMARY_LIMIT - len(head) - len(body) - len(tail) - len(action) - len(' ()')

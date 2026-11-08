@@ -58,10 +58,13 @@ class Revision:
 
 
 class FakePage:
-    def __init__(self, title, text='', *, exists=True, redirect=False, may_edit=True,
+    def __init__(self, title, text='', *, exists=True, redirect=False, redirect_to=None,
+                 may_edit=True,
                  save_errors=(), broken=False, wiki=None):
         self._title, self.text = title, text
-        self._exists, self._redirect, self._may_edit = exists, redirect, may_edit
+        self._exists, self._may_edit = exists, may_edit
+        self._redirect = redirect or redirect_to is not None
+        self._redirect_to = redirect_to
         self._save_errors = list(save_errors)   # raised by the saves in turn
         self._broken = broken
         self.wiki = wiki
@@ -84,6 +87,11 @@ class FakePage:
 
     def isRedirectPage(self):
         return self._redirect
+
+    def getRedirectTarget(self):
+        if self._redirect_to is None:
+            raise ValueError(f'{self._title} has no target')
+        return self.wiki.page(self._redirect_to) if self.wiki else FakePage(self._redirect_to)
 
     def isTalkPage(self):
         return self.namespace() % 2 == 1

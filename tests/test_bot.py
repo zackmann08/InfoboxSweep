@@ -131,11 +131,13 @@ def test_pages_that_are_not_checked(tmp_path):
              FakePage('Article', '{{Infobox film}}'),
              FakePage('User talk:Someone', FILM_TALK),
              FakePage('Talk:Moved', FILM_TALK), FakePage('Moved', '#REDIRECT', redirect=True))
+    # Talk:Moved's article is a redirect: its request comes off (see
+    # test_the_article_is_a_redirect).
     wiki.request('Excluded', INFOBOX_ARTICLE, FILM_TALK, may_edit=False)
     wiki.tree(ROOT_CATEGORY, pages=['Talk:Missing', 'Talk:Redirect', 'Article',
                                     'User talk:Someone', 'Talk:Moved'])
     _, report = run(wiki, tmp_path)
-    assert report.edits == []
+    assert [edit.talk for edit in report.edits] == ['Talk:Moved']
     assert dict(report.skipped) == {
         'Talk:Missing': 'the page does not exist (any more)',
         'Talk:Redirect': 'the page is a redirect',
@@ -143,7 +145,7 @@ def test_pages_that_are_not_checked(tmp_path):
         'Talk:Excluded': 'excludes the bot with {{bots}} or {{nobots}}'}
     reviews = {title: why for title, _, why in report.reviews}
     assert reviews['Article'].startswith('not a talk page')
-    assert reviews['Talk:Moved'].startswith('the article is a redirect')
+    assert 'Talk:Moved' not in reviews
 
 
 def test_other_namespaces_in_a_dry_run(tmp_path):
@@ -507,3 +509,47 @@ def test_transcluding_template_infobox_is_not_an_infobox(tmp_path):
     _, report = run(wiki, tmp_path)
     assert report.checked == 3 and report.unfulfilled == 3 and report.fulfilled == 0
     assert report.edits == [] and report.reviews == []
+
+
+def test_the_article_is_a_redirect(tmp_path):
+    # As on Talk:Felubakshi: the article is a redirect, so there's nothing
+    # to have an infobox, and the request comes off.
+    wiki = FakeWiki()
+    wiki.add(FakePage('Felubakshi', '#REDIRECT [[Phulbari]]', redirect_to='Phulbari'),
+             FakePage('Phulbari', INFOBOX_ARTICLE), FakePage('Talk:Felubakshi', FILM_TALK))
+    wiki.tree(ROOT_CATEGORY, pages=['Talk:Felubakshi'])
+    _, report = run(wiki, tmp_path, live=True, progress_minutes=0)
+    assert report.redirects == 1 and report.reviews == [] and report.fulfilled == 0
+    [edit] = report.edits
+    assert edit.evidence == 'the article is a redirect to [[Phulbari]]'
+    assert wiki.page('Talk:Felubakshi').summaries == [
+        'Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Felubakshi]] '
+        'is a redirect to [[Phulbari]] ([[Wikipedia:Bots/Requests_for_approval/ZackBot_10|'
+        'ZackBot 10]] - [[User talk:ExampleBot|report false positive]])']
+    assert 'article is a redirect: 1' in report.text()
+
+
+def test_a_redirect_whose_target_cannot_be_told(tmp_path):
+    wiki = FakeWiki()
+    wiki.add(FakePage('Moved', '#REDIRECT', redirect=True), FakePage('Talk:Moved', FILM_TALK))
+    wiki.tree(ROOT_CATEGORY, pages=['Talk:Moved'])
+    _, report = run(wiki, tmp_path)
+    [edit] = report.edits
+    assert edit.evidence == 'the article is a redirect'
+    assert ': [[Moved]] is a redirect ([[' in edit.summary
+
+
+def test_a_redirect_still_requested_another_way(tmp_path):
+    wiki = FakeWiki()
+    wiki.add(FakePage('Moved', '#REDIRECT', redirect_to='Elsewhere'),
+             FakePage('Talk:Moved', '{{WikiProject Film}}'),
+             FakePage('Talk:Kept', FILM_TALK), FakePage('Kept', '#R', redirect_to='Elsewhere'))
+    wiki.sticky = {'Talk:Moved': {ROOT_CATEGORY}, 'Talk:Kept': {ROOT_CATEGORY}}
+    wiki.tree(ROOT_CATEGORY, pages=['Talk:Moved', 'Talk:Kept'])
+    _, report = run(wiki, tmp_path)
+    assert report.edits == []
+    reviews = {title: why for title, _, why in report.reviews}
+    assert reviews['Talk:Moved'].startswith('the article is a redirect to [[Elsewhere]], but '
+                                            'the bot could not find the request')
+    assert reviews['Talk:Kept'].startswith('the article is a redirect to [[Elsewhere]], but '
+                                           'after removing')

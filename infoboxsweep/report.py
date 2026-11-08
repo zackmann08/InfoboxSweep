@@ -43,6 +43,7 @@ class Report:
     checked: int = 0               # talk pages whose article was checked
     fulfilled: int = 0             # articles that have what was asked for
     unfulfilled: int = 0           # and those that haven't
+    redirects: int = 0             # articles that are redirects: the request comes off
     edits: list[Edit] = field(default_factory=list)
     reviews: list[tuple[str, str, str]] = field(default_factory=list)   # (page, article, why)
     skipped: list[tuple[str, str]] = field(default_factory=list)
@@ -77,6 +78,7 @@ class Report:
         lines += ['', f'Talk pages checked:   {self.checked}',
                   f'  article has {self.thing}: {self.fulfilled}',
                   f'  article has none: {self.unfulfilled}',
+                  f'  article is a redirect: {self.redirects}',
                   f'{verb:<22}{len(self.edits)}',
                   f'Need manual review:   {len(self.reviews)}',
                   f'Skipped:              {len(self.skipped)}',
