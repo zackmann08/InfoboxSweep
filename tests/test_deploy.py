@@ -67,7 +67,7 @@ def test_each_task_has_its_command(toolforge, function, log):
     tmp_path, _, _ = toolforge
     assert bash(toolforge, function, '--dry-run').returncode == 0
     [call] = _read(tmp_path / 'toolforge.log')
-    name = {'runibox': 'dry-ibox', 'runimages': 'dry-images'}[function]
+    name = {'runibox': 'dry-needs-infobox', 'runimages': 'dry-images'}[function]
     assert call[:3] == ['jobs', 'run', name]
     subprocess.run(['sh', '-c', call[call.index('--command') + 1]], check=True)
     assert _read(tmp_path / log) == [['run', '--stop-file', f'stop/{name}']]
@@ -75,11 +75,12 @@ def test_each_task_has_its_command(toolforge, function, log):
 
 @needs_bash
 @pytest.mark.parametrize(('args', 'name', 'bot_args'), [
-    ((), 'ibox', ['run', '--live', '--stop-file', 'stop/ibox']),
-    (('--max-edits', '10'), 'ibox',
-     ['run', '--live', '--stop-file', 'stop/ibox', '--max-edits', '10']),
-    (('--dry-run', '--limit', '50', '--summary-suffix', "it's done"), 'dry-ibox',
-     ['run', '--stop-file', 'stop/dry-ibox', '--limit', '50', '--summary-suffix', "it's done"]),
+    ((), 'needs-infobox', ['run', '--live', '--stop-file', 'stop/needs-infobox']),
+    (('--max-edits', '10'), 'needs-infobox',
+     ['run', '--live', '--stop-file', 'stop/needs-infobox', '--max-edits', '10']),
+    (('--dry-run', '--limit', '50', '--summary-suffix', "it's done"), 'dry-needs-infobox',
+     ['run', '--stop-file', 'stop/dry-needs-infobox', '--limit', '50',
+      '--summary-suffix', "it's done"]),
 ])
 def test_runibox(toolforge, args, name, bot_args):
     tmp_path, _, bot_dir = toolforge
@@ -99,7 +100,7 @@ def test_runibox(toolforge, args, name, bot_args):
 @needs_bash
 def test_stopibox(toolforge):
     tmp_path, _, bot_dir = toolforge
-    stop = bot_dir / 'stop' / 'ibox'
+    stop = bot_dir / 'stop' / 'needs-infobox'
 
     def bot_stops():
         for _ in range(100):
@@ -111,15 +112,15 @@ def test_stopibox(toolforge):
     thread.start()
     done = bash(toolforge, 'stopibox')
     thread.join()
-    assert done.returncode == 0 and 'ibox has stopped' in done.stdout
+    assert done.returncode == 0 and 'needs-infobox has stopped' in done.stdout
 
 
 @needs_bash
 def test_stopibox_gives_up(toolforge):
     _, _, bot_dir = toolforge
     done = bash(toolforge, 'stopibox', '--dry-run', INFOBOXSWEEP_STOP_WAIT='0')
-    assert done.returncode == 1 and "dry-ibox hasn't stopped" in done.stderr
-    assert not (bot_dir / 'stop' / 'dry-ibox').exists()
+    assert done.returncode == 1 and "dry-needs-infobox hasn't stopped" in done.stderr
+    assert not (bot_dir / 'stop' / 'dry-needs-infobox').exists()
     done = bash(toolforge, 'stopimages', INFOBOXSWEEP_STOP_WAIT='0')
     assert done.returncode == 1 and "images hasn't stopped" in done.stderr
     done = bash(toolforge, 'stopimages', 'extra')

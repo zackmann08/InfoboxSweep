@@ -7,9 +7,9 @@
 # tests/test_deploy.py checks every command here is one the bot understands.
 
 # Every Wednesday at 05:17.
-- name: ibox
+- name: needs-infobox
   command: >-
-    cd ~/InfoboxSweep && venv/bin/infoboxsweep run --live --stop-file stop/ibox
+    cd ~/InfoboxSweep && venv/bin/infoboxsweep run --live --stop-file stop/needs-infobox
   image: python3.13
   schedule: "17 5 * * 3"
   emails: onfailure

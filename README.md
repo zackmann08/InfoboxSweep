@@ -476,17 +476,17 @@ Pywikibot at it, for every job. Add the `infoboxsweep` bot password to its
 Then add `source ~/InfoboxSweep/deploy/runibox.sh` to `~/.bashrc`, for:
 
 ```bash
-runibox                          # infoboxes: a live run over the whole tree, as the job "ibox"
+runibox                          # infoboxes: a live run over the whole tree, as the job "needs-infobox"
 runibox --max-edits 10           # options go to infoboxsweep run
-runibox --dry-run --limit 500    # a dry run, as "dry-ibox"
-stopibox                         # stop "ibox" cleanly, and wait until it has reported
+runibox --dry-run --limit 500    # a dry run, as "dry-needs-infobox"
+stopibox                         # stop "needs-infobox" cleanly, and wait until it has reported
 
 runimages                        # photographs: the same, with imagesweep, as the job "images"
 runimages --dry-run --limit 500  # as "dry-images"
 stopimages                       # stop "images" cleanly
 ```
 
-Each job writes its log to `~/<job>.err` (`~/ibox.err`, `~/images.err`) and
+Each job writes its log to `~/<job>.err` (`~/needs-infobox.err`, `~/images.err`) and
 its report to `~/InfoboxSweep/out/`. The two tasks can run at the same time:
 they edit different talk pages' requests and report on different pages. To
 run them every week,

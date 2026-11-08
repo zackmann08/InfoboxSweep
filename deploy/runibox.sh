@@ -4,8 +4,9 @@
 #     source ~/InfoboxSweep/deploy/runibox.sh
 #
 # runibox starts a live run of the infobox task (infoboxsweep) over its whole
-# category tree, as the job "ibox"; runimages, of the photograph task
-# (imagesweep), as "images".  With --dry-run first, a dry run, as "dry-ibox"
+# category tree, as the job "needs-infobox"; runimages, of the photograph task
+# (imagesweep), as "images".  With --dry-run first, a dry run, as
+# "dry-needs-infobox"
 # or "dry-images".  Anything after goes to the command's run, so quote
 # option values with spaces:
 #
@@ -27,7 +28,7 @@
 # commands wait, in seconds (default: 600).
 
 runibox() {
-  _infoboxsweep_run infoboxsweep ibox "$@"
+  _infoboxsweep_run infoboxsweep needs-infobox "$@"
 }
 
 runimages() {
@@ -35,7 +36,7 @@ runimages() {
 }
 
 stopibox() {
-  _infoboxsweep_stop stopibox ibox "$@"
+  _infoboxsweep_stop stopibox needs-infobox "$@"
 }
 
 stopimages() {
