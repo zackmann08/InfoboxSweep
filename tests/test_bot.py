@@ -175,7 +175,7 @@ def test_live_run(tmp_path):
                           '== Plot ==\nNeeds work.']
     assert talk.summaries == [
         'Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] '
-        'has an infobox ([[Wikipedia:Bots/Requests for approval/ZackBot 15|ZackBot 15]])']
+        'has an infobox ([[Wikipedia:Bots/Requests for approval/ZackBot 10|ZackBot 10]])']
     assert report.edits[0].saved
     # The report page: when the run started, after the walk, and at the end.
     page = wiki.report_page

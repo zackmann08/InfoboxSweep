@@ -126,7 +126,7 @@ page alone and lists it for manual review. Dry runs do this check too.
 Edit summaries say what was removed and why, and link the bot's approval:
 
 ```wikitext
-Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] has an infobox ([[Wikipedia:Bots/Requests for approval/ZackBot 15|ZackBot 15]])
+Removing infobox request (needs-infobox=yes from {{WikiProject Film}}): [[Example]] has an infobox ([[Wikipedia:Bots/Requests for approval/ZackBot 10|ZackBot 10]])
 ```
 
 ### Pages for manual review
@@ -371,10 +371,12 @@ run.
 
 Each task needs its own approval at
 [Wikipedia:Bots/Requests for approval](https://en.wikipedia.org/wiki/Wikipedia:Bots/Requests_for_approval).
-The edit summaries link placeholders,
-`ZackBot 15` for infoboxes and `ZackBot 16` for photographs: change `BRFA`
-and `PHOTO_BRFA` in [`infoboxsweep/__init__.py`](infoboxsweep/__init__.py)
-to the requests' real names once they're filed, or pass `--brfa`.
+`infoboxsweep` is approved as
+[ZackBot 10](https://en.wikipedia.org/wiki/Wikipedia:Bots/Requests_for_approval/ZackBot_10),
+which its edit summaries link, so it needs no `--trial`. `imagesweep`'s
+summaries link a placeholder, `ZackBot 16`: change `PHOTO_BRFA` in
+[`infoboxsweep/__init__.py`](infoboxsweep/__init__.py) to its request's real
+name once it's filed, or pass `--brfa`.
 
 1. At [Special:BotPasswords](https://en.wikipedia.org/wiki/Special:BotPasswords),
    logged in as ZackBot, make a bot password named `infoboxsweep` with the

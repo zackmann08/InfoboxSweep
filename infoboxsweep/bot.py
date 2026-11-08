@@ -590,7 +590,7 @@ def edit_summary(article: str, removed: Iterable[str], suffix: str = '', *,
                  brfa: str | None = None, trial: bool = False, task: Task = INFOBOX,
                  shown: str = '') -> str:
     """The edit summary: "Removing infobox request ({{Infobox requested}}):
-    [[Foo]] has an infobox (ZackBot 15)", with what was removed, cut short
+    [[Foo]] has an infobox (ZackBot 10)", with what was removed, cut short
     if there's too much, and what the article has, if shown."""
     brfa = task.brfa if brfa is None else brfa
     head = 'BRFA trial: ' if trial else ''
