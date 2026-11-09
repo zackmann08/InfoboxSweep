@@ -141,6 +141,10 @@ def _build_parser(task: Task = INFOBOX) -> argparse.ArgumentParser:
 def _add_category(parser: argparse.ArgumentParser, task: Task) -> None:
     parser.add_argument('--category', default=task.root, metavar='TITLE',
                         help=f'the root of the category tree (default: {task.root})')
+    always = ', '.join(task.excluded) or 'none'
+    parser.add_argument('--exclude-category', action='append', default=[], metavar='TITLE',
+                        help='leave this category out, with its subcategories and every page '
+                             f'in them; repeatable. Always left out: {always}')
 
 
 def user_config_dir() -> Path | None:
@@ -171,10 +175,15 @@ def _category_title(title: str) -> str:
 
 def _tree(args: argparse.Namespace, wiki: Any, task: Task) -> int:
     from .tree import walk
-    tree = walk(wiki, _category_title(args.category), follow=task.follows)
+    tree = walk(wiki, _category_title(args.category), follow=task.follows,
+                exclude=task.excluded + tuple(args.exclude_category))
     print(f'{tree.root}: {len(tree.categories)} categories, {tree.depth} levels deep')
     print(f'{len(tree.pages)} distinct pages; {tree.duplicates} more listings of pages in '
           'more than one category')
+    for category, parent in tree.excluded:
+        print(f'Left out, as asked: {category}, in {parent}')
+    if tree.excluded:
+        print(f'{tree.excluded_pages} pages left out with them')
     for category, parent in tree.not_followed:
         print(f'Not followed (no {task.keyword_text()} in its name): {category}, in {parent}')
     if tree.truncated:
@@ -232,7 +241,8 @@ def _run(args: argparse.Namespace, wiki: Any, task: Task) -> int:
         namespaces=tuple(args.namespace or (1,)), pages=tuple(args.page), limit=args.limit,
         max_edits=args.max_edits, run_page=args.run_page, report_page=args.report_page,
         stop_file=args.stop_file, progress_minutes=args.progress_minutes, brfa=args.brfa,
-        summary_suffix=args.summary_suffix, out_dir=args.out_dir)
+        summary_suffix=args.summary_suffix, out_dir=args.out_dir,
+        exclude=tuple(args.exclude_category))
     bot = Bot(wiki, options)
     report = bot.run()
     verb = 'Changed' if report.live else 'Would change'

@@ -82,6 +82,14 @@ theirs, all the way down, and lists every page in any of them **once**:
   in the tree by mistake, and could lead the bot into thousands of pages that
   never asked for an infobox, so it isn't followed and is listed for manual
   review instead.
+- **Categories left out.** Some categories are skipped on every run:
+  for `infoboxsweep`, [Category:Law articles needing an infobox](https://en.wikipedia.org/wiki/Category:Law_articles_needing_an_infobox),
+  whose pages need sorting out by hand (`excluded` in
+  [`infoboxsweep/tasks.py`](infoboxsweep/tasks.py)). The walk doesn't go
+  into a left-out category or its subcategories, and every talk page in
+  them is left out of the run, even one that's also in another category.
+  `--exclude-category TITLE` (repeatable) leaves out more for one run. The
+  report lists them, and how many pages were left out with them.
 - **A ceiling.** The walk stops at 10,000 categories, far more than the tree
   has, and says so as an error.
 
@@ -521,6 +529,7 @@ Options for `run`:
 | `--live` | Edit for real. Needs `user-config.py`. |
 | `--trial` | Allow a live run without the bot flag, for approved BRFA trial edits. |
 | `--category TITLE` | The root of the tree. Default: `Category:Wikipedia articles with an infobox request` (`imagesweep`: `Category:Wikipedia requested photographs`). Also taken by `tree`. |
+| `--exclude-category TITLE` | Also leave out this category, its subcategories and every page in them. Repeatable. Category:Law articles needing an infobox is always left out of `infoboxsweep` runs. Also taken by `tree`. |
 | `--page TITLE` | Only check this page (a talk page, or an article for its talk page), not the tree. Repeatable. |
 | `--namespace N` | Check talk pages in namespace N instead of 1. Repeatable. Dry runs only. |
 | `--limit N` | Stop after checking N talk pages. |

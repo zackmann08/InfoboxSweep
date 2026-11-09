@@ -60,3 +60,33 @@ def test_check_is_called_before_each_category():
 def test_an_empty_tree():
     tree = walk(FakeWiki(), ROOT)
     assert tree.categories == [ROOT] and tree.pages == [] and tree.depth == 0
+
+
+LAW = 'Category:Law articles needing an infobox'
+LAW_SUB = 'Category:Criminal law articles needing an infobox'
+
+
+def law_wiki():
+    return (FakeWiki()
+            .tree(ROOT, pages=['Talk:A'], subcats=[FILM, LAW])
+            .tree(FILM, pages=['Talk:B', 'Talk:Both'])
+            .tree(LAW, pages=['Talk:L', 'Talk:Both'], subcats=[LAW_SUB])
+            .tree(LAW_SUB, pages=['Talk:Deep']))
+
+
+def test_an_excluded_category_is_left_out_pages_and_all():
+    wiki = law_wiki()
+    tree = walk(wiki, ROOT, exclude=['law articles needing an infobox'])
+    assert LAW not in tree.categories and LAW_SUB not in tree.categories
+    assert tree.excluded == [(LAW, ROOT)]
+    # Talk:Both is in Film too, but in the excluded category: left out.
+    assert tree.pages == ['Talk:A', 'Talk:B']
+    assert tree.excluded_pages == 3   # Talk:L, Talk:Both and Talk:Deep
+    assert tree.not_followed == []
+
+
+def test_category_title():
+    from infoboxsweep.tree import category_title
+    for name in ('Category:Law articles needing an infobox', 'Law_articles_needing_an_infobox',
+                 'category:law articles  needing an infobox'):
+        assert category_title(name) == LAW

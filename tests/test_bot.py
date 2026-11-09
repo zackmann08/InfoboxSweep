@@ -553,3 +553,21 @@ def test_a_redirect_still_requested_another_way(tmp_path):
                                             'the bot could not find the request')
     assert reviews['Talk:Kept'].startswith('the article is a redirect to [[Elsewhere]], but '
                                            'after removing')
+
+
+def test_the_law_category_is_always_left_out(tmp_path):
+    law = 'Category:Law articles needing an infobox'
+    wiki = FakeWiki()
+    wiki.tree(ROOT_CATEGORY, subcats=[law, FILM_CATEGORY])
+    wiki.request('Statute', INFOBOX_ARTICLE, FILM_TALK, category=law)
+    wiki.request('Example', INFOBOX_ARTICLE, FILM_TALK, category=FILM_CATEGORY)
+    wiki.request('Court', INFOBOX_ARTICLE, FILM_TALK, category=FILM_CATEGORY)
+    wiki.tree(law, pages=['Talk:Court'])   # in both: left out
+    bot, report = run(wiki, tmp_path)
+    assert [edit.talk for edit in report.edits] == ['Talk:Example']
+    assert report.excluded == [(law, ROOT_CATEGORY)] and report.excluded_pages == 2
+    assert ('Categories left out, as asked (2 pages in them not checked)'
+            in bot.report_path.read_text())
+    # And others, for one run.
+    _, report = run(wiki, tmp_path, exclude=(FILM_CATEGORY,))
+    assert report.edits == [] and report.excluded_pages == 3

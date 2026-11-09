@@ -15,10 +15,15 @@ Ohio"); a category without one was most likely put in the tree by mistake,
 and following it could take the bot through thousands of pages that never
 asked for anything.  Such categories are listed on the report, for a human,
 and not followed.
+
+A task, or a run, can also exclude categories by name (Task.excluded,
+--exclude-category).  The walk doesn't go into an excluded category, and
+drops every page in it, or in its own subcategories, even one it also found
+in another category: those pages are left out of the run altogether.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 from .wiki import Wiki
@@ -41,6 +46,8 @@ class Tree:
     not_followed: list[tuple[str, str]] = field(default_factory=list)   # (category, parent)
     depth: int = 0               # how many levels below the root the tree goes
     truncated: bool = False      # stopped at MAX_CATEGORIES
+    excluded: list[tuple[str, str]] = field(default_factory=list)   # (category, parent)
+    excluded_pages: int = 0      # distinct pages in the excluded categories, left out
 
     @property
     def duplicates(self) -> int:
@@ -53,12 +60,40 @@ def follows(category: str) -> bool:
     return 'infobox' in category.lower()
 
 
+def category_title(title: str) -> str:
+    """A category's title as MediaWiki gives it: Category:, underscores as
+    spaces, the first letter of the name upper-cased."""
+    name = ' '.join(title.replace('_', ' ').split())
+    if name.lower().startswith('category:'):
+        name = name.split(':', 1)[1].strip()
+    return 'Category:' + name[:1].upper() + name[1:]
+
+
 def walk(wiki: Wiki, root: str, *, max_categories: int = MAX_CATEGORIES,
          check: Callable[[], None] = lambda: None,
-         follow: Callable[[str], bool] = follows) -> Tree:
+         follow: Callable[[str], bool] = follows, exclude: Iterable[str] = ()) -> Tree:
     """The tree under root.  check is called before reading each category,
     so that the run can be stopped as the walk goes; follow says which
-    subcategories to go into."""
+    subcategories to go into, and exclude which to leave out, pages and
+    all."""
+    excluded = {category_title(c) for c in exclude}
+    tree = _walk(wiki, root, max_categories, check, follow, excluded)
+    if tree.excluded:
+        dropped: set[str] = set()
+        for category, _ in tree.excluded:
+            check()
+            dropped.update(_walk(wiki, category, max_categories, check, follow, set()).pages)
+        tree.pages = [page for page in tree.pages if page not in dropped]
+        tree.excluded_pages = len(dropped)
+        log.info('Left out %d pages in %s', tree.excluded_pages,
+                 ', '.join(category for category, _ in tree.excluded))
+    log.info('The tree: %d categories, %d levels deep, %d pages (%d listed more than once)',
+             len(tree.categories), tree.depth, len(tree.pages), tree.duplicates)
+    return tree
+
+
+def _walk(wiki: Wiki, root: str, max_categories: int, check: Callable[[], None],
+          follow: Callable[[str], bool], excluded: set[str]) -> Tree:
     tree = Tree(root)
     seen_pages: set[str] = set()
     seen = {root}
@@ -82,7 +117,10 @@ def walk(wiki: Wiki, root: str, *, max_categories: int = MAX_CATEGORIES,
                 if sub in seen:
                     continue
                 seen.add(sub)
-                if follow(sub):
+                if category_title(sub) in excluded:
+                    log.info('Leaving out %s, in %s, as asked', sub, category)
+                    tree.excluded.append((sub, category))
+                elif follow(sub):
                     below.append(sub)
                 else:
                     log.warning('Not following %s, in %s: not a category for these requests',
@@ -92,6 +130,4 @@ def walk(wiki: Wiki, root: str, *, max_categories: int = MAX_CATEGORIES,
             depth += 1
         tree.depth = depth
         level = below
-    log.info('The tree: %d categories, %d levels deep, %d pages (%d listed more than once)',
-             len(tree.categories), tree.depth, len(tree.pages), tree.duplicates)
     return tree

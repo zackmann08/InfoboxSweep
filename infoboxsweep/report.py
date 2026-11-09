@@ -40,6 +40,8 @@ class Report:
     duplicates: int = 0            # pages listed in more than one of its categories
     depth: int = 0
     not_followed: list[tuple[str, str]] = field(default_factory=list)   # (category, parent)
+    excluded: list[tuple[str, str]] = field(default_factory=list)       # left out, as asked
+    excluded_pages: int = 0        # pages left out with them
     checked: int = 0               # talk pages whose article was checked
     fulfilled: int = 0             # articles that have what was asked for
     unfulfilled: int = 0           # and those that haven't
@@ -84,6 +86,10 @@ class Report:
                   f'Skipped:              {len(self.skipped)}',
                   f'Errors:               {len(self.errors)}']
         lines += self._outcome()
+        if self.excluded:
+            lines += _section(f'Categories left out, as asked ({self.excluded_pages} pages in them '
+                              'not checked)',
+                              [f'{cat} (in {parent})' for cat, parent in self.excluded])
         if self.not_followed:
             lines += _section('Subcategories not followed (not named for these requests)',
                               [f'{cat} (in {parent})' for cat, parent in self.not_followed])

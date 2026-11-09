@@ -43,6 +43,7 @@ class Task:
     check: Checker
     template_params: Collection[str] | None = None   # see request.remove_requests
     details: tuple[str, ...] = ()                    # see request.remove_requests
+    excluded: tuple[str, ...] = ()   # categories left out of every run (see tree.walk)
 
     def follows(self, category: str) -> bool:
         """Whether the walk goes into a subcategory: one with a keyword in
@@ -120,6 +121,8 @@ INFOBOX = Task(
     report='InfoboxReport',
     brfa=BRFA,
     check=check_infoboxes,
+    # Left out, pages and all: its pages need sorting out by hand.
+    excluded=('Category:Law articles needing an infobox',),
 )
 
 PHOTO = Task(

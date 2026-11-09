@@ -236,3 +236,19 @@ def test_check_a_redirect(photo_wiki, capsys):
         'Old name: a redirect, so any photograph request on its talk page comes off\n'
         'Talk:Old name: {{Photo requested}}\n'
         'After removing it: in no photograph request category\n')
+
+
+def test_exclude_category(wiki, capsys):
+    assert cli.main(['tree', '--exclude-category', FILM_CATEGORY]) == 0
+    out = capsys.readouterr().out
+    assert f'Left out, as asked: {FILM_CATEGORY}, in {ROOT_CATEGORY}' in out
+    assert '1 pages left out with them' in out and '0 distinct pages' in out
+    assert cli.main(['run', '--exclude-category', FILM_CATEGORY]) == 0
+    assert 'Would change 0' in capsys.readouterr().out
+
+
+def test_exclude_category_help(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(['run', '--help'])
+    out = ' '.join(capsys.readouterr().out.split())
+    assert 'Always left out: Category:Law articles needing an infobox' in out

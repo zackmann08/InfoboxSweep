@@ -75,6 +75,7 @@ class Options:
     summary_suffix: str = ''                # added to every edit summary
     out_dir: Path = field(default_factory=lambda: Path('out'))
     failures_in_a_row: int = 5
+    exclude: tuple[str, ...] = ()           # categories to leave out, besides the task's
 
 
 class Stopped(Exception):
@@ -232,7 +233,8 @@ class Bot:
             return list(dict.fromkeys(self._talk_title(t) for t in self.options.pages))
         self.report.source = f'every page in the tree under [[:{self.category}]]'
         tree = walk(self.wiki, self.category, check=self._check_operator_stop,
-                    follow=self.task.follows)
+                    follow=self.task.follows,
+                    exclude=self.task.excluded + self.options.exclude)
         self._note_tree(tree)
         if self.started_live:
             self._report_on_wiki(final=False, now=self.now())
@@ -253,6 +255,8 @@ class Bot:
         self.report.duplicates = tree.duplicates
         self.report.depth = tree.depth
         self.report.not_followed = tree.not_followed
+        self.report.excluded = tree.excluded
+        self.report.excluded_pages = tree.excluded_pages
         for category, parent in tree.not_followed:
             self.report.review(category, '', f'a subcategory of {parent} without '
                                f'{self.task.keyword_text()} in its name: not followed. Is it in '
